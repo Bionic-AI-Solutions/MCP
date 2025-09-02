@@ -1,0 +1,31 @@
+services:
+  context7-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: context7-mcp-server
+    ports:
+      - "0.0.0.0:8080:8080"
+    environment:
+      - NODE_ENV=production
+      # Add your Context7 API key here if you have one
+      # - CONTEXT7_API_KEY=your_api_key_here
+      # Proxy settings if needed
+      # - HTTP_PROXY=http://proxy:port
+      # - HTTPS_PROXY=http://proxy:port
+    volumes:
+      # Mount a config directory if you need persistent configuration
+      - ./config:/app/config:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - context7-network
+
+networks:
+  context7-network:
+    driver: bridge
