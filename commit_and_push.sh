@@ -19,9 +19,15 @@ git remote add origin https://github.com/Bionic-AI-Solutions/MCP.git
 git config user.name "Bionic AI Solutions"
 git config user.email "info@bionicaisolutions.com"
 
-# Add the new folders
+# Add the new folders (force add to override .gitignore if needed)
 echo "Adding mcp-servers and mcp-nginx..."
 git add mcp-servers/ mcp-nginx/
+
+# Explicitly add src folders and fastmcp if they exist
+echo "Adding source folders..."
+git add -f mcp-servers/src/ 2>/dev/null || true
+git add -f fastmcp/ 2>/dev/null || true
+git add -f fastmcp/src/ 2>/dev/null || true
 
 # Check status
 echo "Git status:"

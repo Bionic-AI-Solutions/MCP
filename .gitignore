@@ -1,4 +1,4 @@
-# Python
+# Python - but allow src/ folders and source files
 __pycache__/
 *.py[cod]
 *$py.class
@@ -10,6 +10,22 @@ build/
 .venv/
 venv/
 env/
+
+# Allow src/ folders (they contain source code) - must come after ignore patterns
+!**/src/
+!**/src/**/
+!**/src/**/*.py
+!**/src/**/*.ts
+!**/src/**/*.js
+!**/src/**/*.json
+
+# Explicitly include important folders (before other ignores)
+!fastmcp/
+!fastmcp/**/
+!fastmcp/**/*
+!mcp-servers/src/
+!mcp-servers/src/**/
+!mcp-servers/src/**/*
 
 # Environment
 .env
