@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "calculator-mcp": {
+      "url": "http://localhost:8000/mcp",
+      "description": "Calculator MCP Server - Running in Docker"
+    },
+    "postgres-mcp": {
+      "url": "http://localhost:8001/mcp",
+      "description": "PostgreSQL MCP Server - Running in Docker"
+    },
+    "minio-mcp": {
+      "url": "http://localhost:8002/mcp",
+      "description": "MinIO MCP Server - Running in Docker"
+    }
+  }
+}

@@ -1,0 +1,115 @@
+services:
+  # Redis for tenant configuration storage
+  redis:
+    image: redis:7-alpine
+    container_name: mcp-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    networks:
+      - mcp-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Calculator MCP Server
+  mcp-calculator-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: calculator
+    container_name: mcp-calculator-server
+    ports:
+      - "8000:8000"
+    environment:
+      - SERVER_NAME=Calculator Server
+    restart: unless-stopped
+    networks:
+      - mcp-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+  # Postgres MCP Server
+  mcp-postgres-server-new:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: postgres
+    container_name: mcp-postgres-server-new
+    ports:
+      - "8001:8001"
+    environment:
+      - SERVER_NAME=Postgres Server
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - POSTGRES_TENANT_1_HOST=${POSTGRES_TENANT_1_HOST:-localhost}
+      - POSTGRES_TENANT_1_PORT=${POSTGRES_TENANT_1_PORT:-5432}
+      - POSTGRES_TENANT_1_DB=${POSTGRES_TENANT_1_DB:-mydb}
+      - POSTGRES_TENANT_1_USER=${POSTGRES_TENANT_1_USER:-postgres}
+      - POSTGRES_TENANT_1_PASSWORD=${POSTGRES_TENANT_1_PASSWORD:-password}
+      - POSTGRES_TENANT_1_MIN_POOL_SIZE=${POSTGRES_TENANT_1_MIN_POOL_SIZE:-2}
+      - POSTGRES_TENANT_1_MAX_POOL_SIZE=${POSTGRES_TENANT_1_MAX_POOL_SIZE:-10}
+      - POSTGRES_TENANT_1_SSL=${POSTGRES_TENANT_1_SSL:-false}
+    restart: unless-stopped
+    networks:
+      - mcp-network
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # MinIO MCP Server
+  mcp-minio-server-new:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: minio
+    container_name: mcp-minio-server-new
+    ports:
+      - "8002:8002"
+    environment:
+      - SERVER_NAME=MinIO Server
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=1
+      - MINIO_TENANT_1_ENDPOINT=${MINIO_TENANT_1_ENDPOINT:-localhost:9000}
+      - MINIO_TENANT_1_ACCESS_KEY=${MINIO_TENANT_1_ACCESS_KEY:-minioadmin}
+      - MINIO_TENANT_1_SECRET_KEY=${MINIO_TENANT_1_SECRET_KEY:-minioadmin123}
+      - MINIO_TENANT_1_SECURE=${MINIO_TENANT_1_SECURE:-false}
+      - MINIO_TENANT_1_REGION=${MINIO_TENANT_1_REGION:-us-east-1}
+    restart: unless-stopped
+    networks:
+      - mcp-network
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  mcp-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+    driver: local
+

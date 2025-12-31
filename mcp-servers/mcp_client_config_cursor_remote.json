@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "calculator-mcp-remote": {
+      "url": "https://mcp.bionicaisolutions.com/calculator/mcp",
+      "description": "Calculator MCP Server - External access via HTTPS"
+    },
+    "postgres-mcp-remote": {
+      "url": "https://mcp.bionicaisolutions.com/postgres/mcp",
+      "description": "PostgreSQL MCP Server - External access via HTTPS"
+    },
+    "minio-mcp-remote": {
+      "url": "https://mcp.bionicaisolutions.com/minio/mcp",
+      "description": "MinIO MCP Server - External access via HTTPS"
+    }
+  }
+}
