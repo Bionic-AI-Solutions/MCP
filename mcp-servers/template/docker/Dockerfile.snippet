@@ -1,0 +1,17 @@
+# SERVER_NAME stage
+# Add this to the main Dockerfile after the base stage
+FROM base as SERVER_NAME
+COPY src/ ./src/
+WORKDIR /app
+ENV PYTHONPATH=/app/src
+EXPOSE PORT_NUMBER
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:PORT_NUMBER/health || exit 1
+CMD ["fastmcp", "run", "src/mcp_servers/SERVER_NAME/server.py", "--transport", "http", "--port", "PORT_NUMBER", "--host", "0.0.0.0"]
+
+# Instructions:
+# 1. Replace SERVER_NAME with your actual server name (lowercase)
+# 2. Replace PORT_NUMBER with your server's port (e.g., 8003)
+# 3. Add any additional system dependencies to the base stage if needed
+# 4. Add your Python dependencies to the base stage's pip install command
+

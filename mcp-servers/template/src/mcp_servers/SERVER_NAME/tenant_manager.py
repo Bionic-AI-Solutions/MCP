@@ -1,7 +1,7 @@
 """
-PostgreSQL Tenant Manager
+SERVER_NAME Tenant Manager
 
-Manages multiple PostgreSQL tenant connections with connection pooling.
+Manages multiple SERVER_NAME tenant connections.
 Tenant configurations are persisted in Redis for durability across restarts.
 """
 
@@ -10,42 +10,51 @@ import os
 from typing import Optional, Dict
 from contextlib import asynccontextmanager
 
-import psycopg
-from psycopg_pool import AsyncConnectionPool
 from pydantic import BaseModel, Field
 import redis.asyncio as redis
 
+# Import your service client library here
+# Example:
+# from your_service_library import Client
+# import httpx
 
-class PostgresTenantConfig(BaseModel):
-    """Configuration for a single PostgreSQL tenant."""
+
+class SERVER_NAMETenantConfig(BaseModel):
+    """Configuration for a single SERVER_NAME tenant."""
 
     tenant_id: str = Field(..., description="Unique identifier for this tenant")
-    host: str = Field(..., description="PostgreSQL host")
-    port: int = Field(default=5432, description="PostgreSQL port")
-    database: str = Field(..., description="Database name")
-    user: str = Field(..., description="Username")
-    password: str = Field(..., description="Password")
-    min_pool_size: int = Field(default=2, description="Minimum connection pool size")
-    max_pool_size: int = Field(default=10, description="Maximum connection pool size")
-    ssl: bool = Field(default=False, description="Use SSL/TLS")
+    
+    # Add your tenant configuration fields here
+    # Example for API-based service:
+    # api_key: str = Field(..., description="API key for authentication")
+    # api_url: str = Field(..., description="API base URL")
+    # timeout: int = Field(default=30, description="Request timeout in seconds")
+    
+    # Example for database service:
+    # host: str = Field(..., description="Database host")
+    # port: int = Field(default=5432, description="Database port")
+    # database: str = Field(..., description="Database name")
+    # user: str = Field(..., description="Username")
+    # password: str = Field(..., description="Password")
+    # ssl: bool = Field(default=False, description="Use SSL/TLS")
+    
+    # Example for connection pooling:
+    # min_pool_size: int = Field(default=2, description="Minimum connection pool size")
+    # max_pool_size: int = Field(default=10, description="Maximum connection pool size")
 
-    def get_connection_string(self) -> str:
-        """Get PostgreSQL connection string."""
-        ssl_mode = "require" if self.ssl else "disable"
-        return (
-            f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/"
-            f"{self.database}?sslmode={ssl_mode}"
-        )
 
-
-class PostgresTenantManager:
-    """Manages multiple PostgreSQL tenant connections with pooling and Redis persistence."""
+class SERVER_NAMETenantManager:
+    """Manages multiple SERVER_NAME tenant connections with Redis persistence."""
 
     def __init__(self):
-        self.pools: Dict[str, AsyncConnectionPool] = {}
-        self.configs: Dict[str, PostgresTenantConfig] = {}
+        # Store your tenant clients/connections here
+        # Example:
+        # self.clients: Dict[str, Client] = {}
+        # self.connections: Dict[str, Connection] = {}
+        self.clients: Dict[str, Any] = {}
+        self.configs: Dict[str, SERVER_NAMETenantConfig] = {}
         self.redis_client: Optional[redis.Redis] = None
-        self.redis_key_prefix = "mcp:postgres:tenant:"
+        self.redis_key_prefix = "mcp:SERVER_NAME:tenant:"
         self._redis_initialized = False
 
     async def _init_redis(self) -> None:
@@ -75,7 +84,7 @@ class PostgresTenantManager:
             self.redis_client = None
             self._redis_initialized = True  # Mark as initialized to avoid retry loops
 
-    async def _save_to_redis(self, config: PostgresTenantConfig) -> None:
+    async def _save_to_redis(self, config: SERVER_NAMETenantConfig) -> None:
         """Save tenant configuration to Redis."""
         await self._init_redis()
         if not self.redis_client:
@@ -83,13 +92,13 @@ class PostgresTenantManager:
 
         try:
             key = f"{self.redis_key_prefix}{config.tenant_id}"
-            # Store as JSON (password will be in plain text - consider encryption for production)
+            # Store as JSON (sensitive data will be in plain text - consider encryption for production)
             config_dict = config.model_dump()
             await self.redis_client.set(key, json.dumps(config_dict))
         except Exception as e:
             print(f"Warning: Failed to save tenant config to Redis: {e}")
 
-    async def _load_from_redis(self, tenant_id: str) -> Optional[PostgresTenantConfig]:
+    async def _load_from_redis(self, tenant_id: str) -> Optional[SERVER_NAMETenantConfig]:
         """Load tenant configuration from Redis."""
         await self._init_redis()
         if not self.redis_client:
@@ -100,12 +109,12 @@ class PostgresTenantManager:
             config_json = await self.redis_client.get(key)
             if config_json:
                 config_dict = json.loads(config_json)
-                return PostgresTenantConfig(**config_dict)
+                return SERVER_NAMETenantConfig(**config_dict)
         except Exception as e:
             print(f"Warning: Failed to load tenant config from Redis: {e}")
         return None
 
-    async def _load_all_from_redis(self) -> Dict[str, PostgresTenantConfig]:
+    async def _load_all_from_redis(self) -> Dict[str, SERVER_NAMETenantConfig]:
         """Load all tenant configurations from Redis."""
         await self._init_redis()
         if not self.redis_client:
@@ -124,48 +133,57 @@ class PostgresTenantManager:
             print(f"Warning: Failed to load all tenant configs from Redis: {e}")
         return configs
 
-    def load_tenant_from_env(self, tenant_id: str) -> Optional[PostgresTenantConfig]:
+    def load_tenant_from_env(self, tenant_id: str) -> Optional[SERVER_NAMETenantConfig]:
         """Load tenant configuration from environment variables."""
-        prefix = f"POSTGRES_TENANT_{tenant_id.upper()}"
-        host = os.getenv(f"{prefix}_HOST")
-        if not host:
-            return None
+        prefix = f"SERVER_NAME_TENANT_{tenant_id.upper()}"
+        
+        # Check if tenant is configured via environment variables
+        # Example:
+        # api_key = os.getenv(f"{prefix}_API_KEY")
+        # if not api_key:
+        #     return None
+        
+        # return SERVER_NAMETenantConfig(
+        #     tenant_id=tenant_id,
+        #     api_key=api_key,
+        #     api_url=os.getenv(f"{prefix}_API_URL", ""),
+        #     timeout=int(os.getenv(f"{prefix}_TIMEOUT", "30")),
+        # )
+        
+        # For now, return None - implement based on your needs
+        return None
 
-        return PostgresTenantConfig(
-            tenant_id=tenant_id,
-            host=host,
-            port=int(os.getenv(f"{prefix}_PORT", "5432")),
-            database=os.getenv(f"{prefix}_DB", os.getenv(f"{prefix}_DATABASE", "")),
-            user=os.getenv(f"{prefix}_USER", "postgres"),
-            password=os.getenv(f"{prefix}_PASSWORD", ""),
-            min_pool_size=int(os.getenv(f"{prefix}_MIN_POOL_SIZE", "2")),
-            max_pool_size=int(os.getenv(f"{prefix}_MAX_POOL_SIZE", "10")),
-            ssl=os.getenv(f"{prefix}_SSL", "false").lower() == "true",
-        )
-
-    async def register_tenant(self, config: PostgresTenantConfig) -> None:
-        """Register a tenant and create a connection pool."""
-        if config.tenant_id in self.pools:
-            # Close existing pool
-            await self.pools[config.tenant_id].close()
-
-        # Create new connection pool
-        pool = AsyncConnectionPool(
-            config.get_connection_string(),
-            min_size=config.min_pool_size,
-            max_size=config.max_pool_size,
-            open=False,
-        )
-        await pool.open()
-        self.pools[config.tenant_id] = pool
+    async def register_tenant(self, config: SERVER_NAMETenantConfig) -> None:
+        """Register a tenant and create a client/connection."""
+        # Create your service client/connection here
+        # Example for API client:
+        # client = Client(
+        #     api_key=config.api_key,
+        #     base_url=config.api_url,
+        #     timeout=config.timeout,
+        # )
+        
+        # Example for database connection:
+        # connection = create_connection(
+        #     host=config.host,
+        #     port=config.port,
+        #     database=config.database,
+        #     user=config.user,
+        #     password=config.password,
+        #     ssl=config.ssl,
+        # )
+        
+        # Store the client/connection
+        # self.clients[config.tenant_id] = client
+        # self.connections[config.tenant_id] = connection
         self.configs[config.tenant_id] = config
 
         # Persist to Redis
         await self._save_to_redis(config)
 
-    async def get_pool(self, tenant_id: str) -> AsyncConnectionPool:
-        """Get connection pool for a tenant."""
-        if tenant_id not in self.pools:
+    async def get_client(self, tenant_id: str) -> Any:
+        """Get client/connection for a tenant."""
+        if tenant_id not in self.clients:
             # Try to load from Redis first
             config = await self._load_from_redis(tenant_id)
             if not config:
@@ -178,14 +196,7 @@ class PostgresTenantManager:
                     f"Tenant '{tenant_id}' not found. Configure it via environment variables or register it programmatically."
                 )
 
-        return self.pools[tenant_id]
-
-    @asynccontextmanager
-    async def get_connection(self, tenant_id: str):
-        """Get a connection from the tenant's pool."""
-        pool = await self.get_pool(tenant_id)
-        async with pool.connection() as conn:
-            yield conn
+        return self.clients[tenant_id]
 
     async def initialize(self) -> None:
         """Initialize tenant manager - load all tenants from Redis and environment."""
@@ -198,8 +209,8 @@ class PostgresTenantManager:
         # Check for common tenant IDs
         tenant_ids = set()
         for key in os.environ:
-            if key.startswith("POSTGRES_TENANT_") and key.endswith("_HOST"):
-                tenant_id = key.replace("POSTGRES_TENANT_", "").replace("_HOST", "").lower()
+            if key.startswith("SERVER_NAME_TENANT_") and key.endswith("_API_KEY"):  # Adjust suffix based on your config
+                tenant_id = key.replace("SERVER_NAME_TENANT_", "").replace("_API_KEY", "").lower()
                 tenant_ids.add(tenant_id)
 
         for tenant_id in tenant_ids:
@@ -209,13 +220,19 @@ class PostgresTenantManager:
                     await self.register_tenant(config)
 
     async def close_all(self) -> None:
-        """Close all connection pools and Redis connection."""
-        for pool in self.pools.values():
-            await pool.close()
-        self.pools.clear()
+        """Close all connections and Redis connection."""
+        # Close your service clients/connections here
+        # Example:
+        # for client in self.clients.values():
+        #     await client.close()
+        # for connection in self.connections.values():
+        #     await connection.close()
+        
+        self.clients.clear()
         self.configs.clear()
 
         if self.redis_client:
             await self.redis_client.aclose()
             self.redis_client = None
             self._redis_initialized = False
+

@@ -20,12 +20,14 @@ except ImportError:
 tenant_manager = PostgresTenantManager()
 
 
-# Lifespan function for cleanup
+# Lifespan function for initialization and cleanup
 @asynccontextmanager
 async def lifespan(server: FastMCP) -> AsyncIterator[None]:
-    """Manage server lifespan - cleanup connection pools on shutdown."""
+    """Manage server lifespan - initialize tenants from Redis and cleanup on shutdown."""
+    # Initialize: load tenants from Redis and environment
+    await tenant_manager.initialize()
     yield
-    # Cleanup: close all connection pools
+    # Cleanup: close all connection pools and Redis connection
     await tenant_manager.close_all()
 
 
@@ -180,12 +182,15 @@ async def register_tenant(
     max_pool_size: int = 10,
     ssl: bool = False,
     ctx: Optional[Context] = None,
-) -> Dict[str, str]:
+) -> Dict[str, Any]:
     """Register a new tenant configuration."""
     if ctx:
         await ctx.info(f"Registering tenant: {tenant_id}")
 
-    from .tenant_manager import PostgresTenantConfig
+    try:
+        from mcp_servers.postgres.tenant_manager import PostgresTenantConfig
+    except ImportError:
+        from .tenant_manager import PostgresTenantConfig
 
     config = PostgresTenantConfig(
         tenant_id=tenant_id,

@@ -1,0 +1,116 @@
+        # SERVER_NAME MCP Server
+        # Route: mcp.bionicaisolutions.com/SERVER_NAME/mcp
+        location = /SERVER_NAME/mcp {
+            proxy_pass http://mcp_SERVER_NAME_backend/mcp;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header Accept "application/json, text/event-stream";
+            proxy_buffering off;
+            proxy_cache off;
+            # Pass SERVER_NAME tenant headers for multi-tenant mode (if needed)
+            # proxy_set_header X-SERVER_NAME-Tenant-Id $http_x_server_name_tenant_id;
+        }
+
+        # Route: mcp.bionicaisolutions.com/SERVER_NAME/sse
+        # Handle POST to /SERVER_NAME/ (for Cursor discovery) - rewrite to /mcp
+        location = /SERVER_NAME/ {
+            # Use mapped session ID (defaults to init-$request_id if not provided)
+            proxy_set_header Mcp-Session-Id $mcp_session_id;
+            proxy_http_version 1.1;
+            proxy_set_header Host 127.0.0.1:8000;
+            proxy_set_header Accept "application/json, text/event-stream";
+            
+            if ($request_method = POST) {
+                # For POST, rewrite to /mcp endpoint
+                rewrite ^ /mcp break;
+                proxy_pass http://mcp_SERVER_NAME_backend;
+                break;
+            }
+            # For GET, redirect to SSE endpoint
+            return 301 /SERVER_NAME/sse;
+        }
+        
+        # Handle POST to /SERVER_NAME/sse (Cursor tries this for streamableHttp) - rewrite to /mcp
+        location = /SERVER_NAME/sse {
+            # Common proxy settings
+            proxy_http_version 1.1;
+            proxy_set_header Host 127.0.0.1:8000;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header Accept "application/json, text/event-stream";
+            proxy_set_header Mcp-Session-Id $mcp_session_id;
+            proxy_buffering off;
+            proxy_cache off;
+            
+            # For POST, rewrite to /mcp; for GET, rewrite to /sse
+            if ($request_method = POST) {
+                rewrite ^ /mcp break;
+            }
+            rewrite ^/SERVER_NAME/(.*) /$1 break;
+            proxy_pass http://mcp_SERVER_NAME_backend;
+        }
+        
+        # Handle /SERVER_NAME/messages requests (with session ID from SSE)
+        location ~ ^/SERVER_NAME/messages {
+            rewrite ^/SERVER_NAME/messages(.*)$ /messages/$1 break;
+            proxy_pass http://mcp_SERVER_NAME_backend;
+            proxy_http_version 1.1;
+            proxy_set_header Host 127.0.0.1:8000;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_buffering off;
+            proxy_cache off;
+        }
+        
+        # Handle /SERVER_NAME/message requests (with session ID from SSE)
+        location ~ ^/SERVER_NAME/message(?:s)?/? {
+            rewrite ^/SERVER_NAME/message(s)?(.*)$ /messages$2 break;
+            proxy_pass http://mcp_SERVER_NAME_backend;
+            proxy_http_version 1.1;
+            proxy_set_header Host 127.0.0.1:8000;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_buffering off;
+            proxy_cache off;
+        }
+        
+        # Handle all other /SERVER_NAME/* paths
+        location /SERVER_NAME/ {
+            rewrite ^/SERVER_NAME/(.*) /$1 break;
+            proxy_pass http://mcp_SERVER_NAME_backend;
+            proxy_http_version 1.1;
+            proxy_set_header Host 127.0.0.1:8000;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header Accept "application/json, text/event-stream";
+            proxy_buffering off;
+            proxy_cache off;
+        }
+
+        # Health check endpoint
+        location /SERVER_NAME/health {
+            proxy_pass http://mcp_SERVER_NAME_backend/health;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        }
+
+# Instructions:
+# 1. Add upstream definition at the top of the nginx.conf file:
+#    upstream mcp_SERVER_NAME_backend {
+#        server mcp-SERVER_NAME-server:PORT_NUMBER;
+#        keepalive 32;
+#    }
+# 2. Replace SERVER_NAME with your actual server name (lowercase)
+# 3. Replace PORT_NUMBER with your server's port
+# 4. Add this configuration inside the HTTPS server block for mcp.bionicaisolutions.com
+# 5. Update the default location block to include /SERVER_NAME/ in the available paths message
+

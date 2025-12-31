@@ -1,38 +1,36 @@
 """
-MinIO Tenant Manager
+PDF Generator Tenant Manager
 
-Manages multiple MinIO tenant connections.
+Manages multiple PDF generator tenant configurations.
 Tenant configurations are persisted in Redis for durability across restarts.
 """
 
 import json
 import os
 from typing import Optional, Dict
+from pathlib import Path
 
-from minio import Minio
 from pydantic import BaseModel, Field
 import redis.asyncio as redis
 
 
-class MinioTenantConfig(BaseModel):
-    """Configuration for a single MinIO tenant."""
+class PdfGeneratorTenantConfig(BaseModel):
+    """Configuration for a single PDF generator tenant."""
 
     tenant_id: str = Field(..., description="Unique identifier for this tenant")
-    endpoint: str = Field(..., description="MinIO endpoint (e.g., 'minio.example.com:9000')")
-    access_key: str = Field(..., description="MinIO access key")
-    secret_key: str = Field(..., description="MinIO secret key")
-    secure: bool = Field(default=True, description="Use HTTPS/TLS")
-    region: Optional[str] = Field(default=None, description="S3 region")
+    storage_path: Optional[str] = Field(
+        default=None,
+        description="Optional custom storage path for this tenant's PDFs"
+    )
 
 
-class MinioTenantManager:
-    """Manages multiple MinIO tenant connections with Redis persistence."""
+class PdfGeneratorTenantManager:
+    """Manages multiple PDF generator tenant configurations with Redis persistence."""
 
     def __init__(self):
-        self.clients: Dict[str, Minio] = {}
-        self.configs: Dict[str, MinioTenantConfig] = {}
+        self.configs: Dict[str, PdfGeneratorTenantConfig] = {}
         self.redis_client: Optional[redis.Redis] = None
-        self.redis_key_prefix = "mcp:minio:tenant:"
+        self.redis_key_prefix = "mcp:pdf-generator:tenant:"
         self._redis_initialized = False
 
     async def _init_redis(self) -> None:
@@ -43,7 +41,7 @@ class MinioTenantManager:
         try:
             redis_host = os.getenv("REDIS_HOST", "redis")
             redis_port = int(os.getenv("REDIS_PORT", "6379"))
-            redis_db = int(os.getenv("REDIS_DB", "1"))  # Use DB 1 for MinIO (different from Postgres)
+            redis_db = int(os.getenv("REDIS_DB", "0"))
             redis_password = os.getenv("REDIS_PASSWORD")
 
             self.redis_client = redis.Redis(
@@ -62,7 +60,7 @@ class MinioTenantManager:
             self.redis_client = None
             self._redis_initialized = True  # Mark as initialized to avoid retry loops
 
-    async def _save_to_redis(self, config: MinioTenantConfig) -> None:
+    async def _save_to_redis(self, config: PdfGeneratorTenantConfig) -> None:
         """Save tenant configuration to Redis."""
         await self._init_redis()
         if not self.redis_client:
@@ -70,13 +68,13 @@ class MinioTenantManager:
 
         try:
             key = f"{self.redis_key_prefix}{config.tenant_id}"
-            # Store as JSON (secret_key will be in plain text - consider encryption for production)
+            # Store as JSON (sensitive data will be in plain text - consider encryption for production)
             config_dict = config.model_dump()
             await self.redis_client.set(key, json.dumps(config_dict))
         except Exception as e:
             print(f"Warning: Failed to save tenant config to Redis: {e}")
 
-    async def _load_from_redis(self, tenant_id: str) -> Optional[MinioTenantConfig]:
+    async def _load_from_redis(self, tenant_id: str) -> Optional[PdfGeneratorTenantConfig]:
         """Load tenant configuration from Redis."""
         await self._init_redis()
         if not self.redis_client:
@@ -87,12 +85,12 @@ class MinioTenantManager:
             config_json = await self.redis_client.get(key)
             if config_json:
                 config_dict = json.loads(config_json)
-                return MinioTenantConfig(**config_dict)
+                return PdfGeneratorTenantConfig(**config_dict)
         except Exception as e:
             print(f"Warning: Failed to load tenant config from Redis: {e}")
         return None
 
-    async def _load_all_from_redis(self) -> Dict[str, MinioTenantConfig]:
+    async def _load_all_from_redis(self) -> Dict[str, PdfGeneratorTenantConfig]:
         """Load all tenant configurations from Redis."""
         await self._init_redis()
         if not self.redis_client:
@@ -111,53 +109,32 @@ class MinioTenantManager:
             print(f"Warning: Failed to load all tenant configs from Redis: {e}")
         return configs
 
-    def load_tenant_from_env(self, tenant_id: str) -> Optional[MinioTenantConfig]:
+    def load_tenant_from_env(self, tenant_id: str) -> Optional[PdfGeneratorTenantConfig]:
         """Load tenant configuration from environment variables."""
-        prefix = f"MINIO_TENANT_{tenant_id.upper()}"
-        endpoint = os.getenv(f"{prefix}_ENDPOINT")
-        if not endpoint:
+        prefix = f"PDF_GENERATOR_TENANT_{tenant_id.upper()}"
+        
+        storage_path = os.getenv(f"{prefix}_STORAGE_PATH")
+        
+        # If no config found, return None
+        if not storage_path:
             return None
-
-        return MinioTenantConfig(
+        
+        return PdfGeneratorTenantConfig(
             tenant_id=tenant_id,
-            endpoint=endpoint,
-            access_key=os.getenv(f"{prefix}_ACCESS_KEY", ""),
-            secret_key=os.getenv(f"{prefix}_SECRET_KEY", ""),
-            secure=os.getenv(f"{prefix}_SECURE", "true").lower() == "true",
-            region=os.getenv(f"{prefix}_REGION"),
+            storage_path=storage_path,
         )
 
-    async def register_tenant(self, config: MinioTenantConfig) -> None:
-        """Register a tenant and create a MinIO client."""
-        client = Minio(
-            config.endpoint,
-            access_key=config.access_key,
-            secret_key=config.secret_key,
-            secure=config.secure,
-            region=config.region,
-        )
-        self.clients[config.tenant_id] = client
+    async def register_tenant(self, config: PdfGeneratorTenantConfig) -> None:
+        """Register a tenant configuration."""
+        # Create storage directory if custom path provided
+        if config.storage_path:
+            storage_dir = Path(config.storage_path)
+            storage_dir.mkdir(parents=True, exist_ok=True)
+        
         self.configs[config.tenant_id] = config
 
         # Persist to Redis
         await self._save_to_redis(config)
-
-    async def get_client(self, tenant_id: str) -> Minio:
-        """Get MinIO client for a tenant."""
-        if tenant_id not in self.clients:
-            # Try to load from Redis first
-            config = await self._load_from_redis(tenant_id)
-            if not config:
-                # Fall back to environment variables
-                config = self.load_tenant_from_env(tenant_id)
-            if config:
-                await self.register_tenant(config)
-            else:
-                raise ValueError(
-                    f"Tenant '{tenant_id}' not found. Configure it via environment variables or register it programmatically."
-                )
-
-        return self.clients[tenant_id]
 
     async def initialize(self) -> None:
         """Initialize tenant manager - load all tenants from Redis and environment."""
@@ -170,8 +147,8 @@ class MinioTenantManager:
         # Check for common tenant IDs
         tenant_ids = set()
         for key in os.environ:
-            if key.startswith("MINIO_TENANT_") and key.endswith("_ENDPOINT"):
-                tenant_id = key.replace("MINIO_TENANT_", "").replace("_ENDPOINT", "").lower()
+            if key.startswith("PDF_GENERATOR_TENANT_") and key.endswith("_STORAGE_PATH"):
+                tenant_id = key.replace("PDF_GENERATOR_TENANT_", "").replace("_STORAGE_PATH", "").lower()
                 tenant_ids.add(tenant_id)
 
         for tenant_id in tenant_ids:
@@ -182,7 +159,10 @@ class MinioTenantManager:
 
     async def close_all(self) -> None:
         """Close Redis connection."""
+        self.configs.clear()
+
         if self.redis_client:
             await self.redis_client.aclose()
             self.redis_client = None
             self._redis_initialized = False
+

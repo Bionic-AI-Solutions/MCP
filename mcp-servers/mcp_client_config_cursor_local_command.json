@@ -1,0 +1,44 @@
+{
+  "mcpServers": {
+    "calculator-mcp": {
+      "command": "/workspace/MCP/mcp-servers/.venv/bin/fastmcp",
+      "args": ["run", "/workspace/MCP/mcp-servers/src/mcp_servers/calculator/server.py"],
+      "cwd": "/workspace/MCP/mcp-servers",
+      "env": {
+        "PYTHONPATH": "/workspace/MCP/mcp-servers/src"
+      }
+    },
+    "postgres-mcp": {
+      "command": "/workspace/MCP/mcp-servers/.venv/bin/fastmcp",
+      "args": ["run", "/workspace/MCP/mcp-servers/src/mcp_servers/postgres/server.py"],
+      "cwd": "/workspace/MCP/mcp-servers",
+      "env": {
+        "PYTHONPATH": "/workspace/MCP/mcp-servers/src",
+        "REDIS_HOST": "localhost",
+        "REDIS_PORT": "6379",
+        "REDIS_DB": "0"
+      }
+    },
+    "minio-mcp": {
+      "command": "/workspace/MCP/mcp-servers/.venv/bin/fastmcp",
+      "args": ["run", "/workspace/MCP/mcp-servers/src/mcp_servers/minio/server.py"],
+      "cwd": "/workspace/MCP/mcp-servers",
+      "env": {
+        "PYTHONPATH": "/workspace/MCP/mcp-servers/src"
+      }
+    },
+    "pdf-generator-mcp": {
+      "command": "/workspace/MCP/mcp-servers/.venv/bin/fastmcp",
+      "args": ["run", "/workspace/MCP/mcp-servers/src/mcp_servers/pdf-generator/server.py"],
+      "cwd": "/workspace/MCP/mcp-servers",
+      "env": {
+        "PYTHONPATH": "/workspace/MCP/mcp-servers/src",
+        "REDIS_HOST": "localhost",
+        "REDIS_PORT": "6379",
+        "REDIS_DB": "2"
+      }
+    }
+  }
+}
+
+

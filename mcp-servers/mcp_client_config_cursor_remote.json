@@ -11,6 +11,10 @@
     "minio-mcp-remote": {
       "url": "https://mcp.bionicaisolutions.com/minio/mcp",
       "description": "MinIO MCP Server - External access via HTTPS"
+    },
+    "pdf-generator-mcp-remote": {
+      "url": "https://mcp.bionicaisolutions.com/pdf-generator/mcp",
+      "description": "PDF Generator MCP Server - External access via HTTPS"
     }
   }
 }

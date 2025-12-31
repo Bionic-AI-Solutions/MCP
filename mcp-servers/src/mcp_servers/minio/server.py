@@ -5,8 +5,9 @@ A FastMCP server providing MinIO object storage operations with multi-tenant sup
 """
 
 import json
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, AsyncIterator
 from io import BytesIO
+from contextlib import asynccontextmanager
 
 from fastmcp import FastMCP, Context
 from pydantic import BaseModel, Field
@@ -17,11 +18,23 @@ try:
 except ImportError:
     from .tenant_manager import MinioTenantManager
 
-# Create server
-mcp = FastMCP("MinIO Server")
-
 # Initialize tenant manager
 tenant_manager = MinioTenantManager()
+
+
+# Lifespan function for initialization and cleanup
+@asynccontextmanager
+async def lifespan(server: FastMCP) -> AsyncIterator[None]:
+    """Manage server lifespan - initialize tenants from Redis and cleanup on shutdown."""
+    # Initialize: load tenants from Redis and environment
+    await tenant_manager.initialize()
+    yield
+    # Cleanup: close Redis connection
+    await tenant_manager.close_all()
+
+
+# Create server with lifespan
+mcp = FastMCP("MinIO Server", lifespan=lifespan)
 
 
 # ============================================================================
@@ -57,7 +70,7 @@ async def list_buckets(
         await ctx.info(f"Listing buckets for tenant: {tenant_id}")
 
     try:
-        client = tenant_manager.get_client(tenant_id)
+        client = await tenant_manager.get_client(tenant_id)
         buckets = client.list_buckets()
         return {
             "success": True,
@@ -85,7 +98,7 @@ async def create_bucket(
         await ctx.info(f"Creating bucket '{bucket_name}' for tenant: {tenant_id}")
 
     try:
-        client = tenant_manager.get_client(tenant_id)
+        client = await tenant_manager.get_client(tenant_id)
         client.make_bucket(bucket_name, location=region)
         return {"success": True, "message": f"Bucket '{bucket_name}' created successfully"}
     except S3Error as e:
@@ -103,7 +116,7 @@ async def delete_bucket(
         await ctx.info(f"Deleting bucket '{bucket_name}' for tenant: {tenant_id}")
 
     try:
-        client = tenant_manager.get_client(tenant_id)
+        client = await tenant_manager.get_client(tenant_id)
         client.remove_bucket(bucket_name)
         return {"success": True, "message": f"Bucket '{bucket_name}' deleted successfully"}
     except S3Error as e:
@@ -121,7 +134,7 @@ async def bucket_exists(
         await ctx.info(f"Checking if bucket '{bucket_name}' exists for tenant: {tenant_id}")
 
     try:
-        client = tenant_manager.get_client(tenant_id)
+        client = await tenant_manager.get_client(tenant_id)
         exists = client.bucket_exists(bucket_name)
         return {"success": True, "exists": exists}
     except S3Error as e:
@@ -141,7 +154,7 @@ async def list_objects(
         await ctx.info(f"Listing objects in bucket '{bucket_name}' for tenant: {tenant_id}")
 
     try:
-        client = tenant_manager.get_client(tenant_id)
+        client = await tenant_manager.get_client(tenant_id)
         objects = client.list_objects(bucket_name, prefix=prefix, recursive=recursive)
         return {
             "success": True,
@@ -173,7 +186,7 @@ async def upload_object(
         await ctx.info(f"Uploading object '{object_name}' to bucket '{bucket_name}' for tenant: {tenant_id}")
 
     try:
-        client = tenant_manager.get_client(tenant_id)
+        client = await tenant_manager.get_client(tenant_id)
         data_bytes = data.encode("utf-8")
         data_stream = BytesIO(data_bytes)
         length = len(data_bytes)
@@ -202,7 +215,7 @@ async def download_object(
         await ctx.info(f"Downloading object '{object_name}' from bucket '{bucket_name}' for tenant: {tenant_id}")
 
     try:
-        client = tenant_manager.get_client(tenant_id)
+        client = await tenant_manager.get_client(tenant_id)
         response = client.get_object(bucket_name, object_name)
         data = response.read()
         response.close()
@@ -229,7 +242,7 @@ async def delete_object(
         await ctx.info(f"Deleting object '{object_name}' from bucket '{bucket_name}' for tenant: {tenant_id}")
 
     try:
-        client = tenant_manager.get_client(tenant_id)
+        client = await tenant_manager.get_client(tenant_id)
         client.remove_object(bucket_name, object_name)
         return {"success": True, "message": f"Object '{object_name}' deleted successfully"}
     except S3Error as e:
@@ -245,12 +258,15 @@ async def register_tenant(
     secure: bool = True,
     region: Optional[str] = None,
     ctx: Optional[Context] = None,
-) -> Dict[str, str]:
+) -> Dict[str, Any]:
     """Register a new tenant configuration."""
     if ctx:
         await ctx.info(f"Registering tenant: {tenant_id}")
 
-    from .tenant_manager import MinioTenantConfig
+    try:
+        from mcp_servers.minio.tenant_manager import MinioTenantConfig
+    except ImportError:
+        from .tenant_manager import MinioTenantConfig
 
     config = MinioTenantConfig(
         tenant_id=tenant_id,
@@ -261,7 +277,7 @@ async def register_tenant(
         region=region,
     )
 
-    tenant_manager.register_tenant(config)
+    await tenant_manager.register_tenant(config)
     return {"success": True, "message": f"Tenant '{tenant_id}' registered successfully"}
 
 

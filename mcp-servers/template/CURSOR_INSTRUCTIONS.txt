@@ -1,0 +1,674 @@
+================================================================================
+INSTRUCTION SET: Creating and Deploying a New Multi-Tenant MCP Server
+For use with Cursor/Claude AI Assistant
+================================================================================
+
+This instruction set provides step-by-step guidance for creating a new MCP server
+using the template, deploying it with Docker, and configuring nginx for remote
+access with HTTP and SSE protocol support.
+
+================================================================================
+PREREQUISITES
+================================================================================
+
+1. Access to the workspace at /workspace/MCP/mcp-servers
+2. Docker and Docker Compose installed and running
+3. Nginx container running and accessible
+4. Redis container running (for tenant persistence)
+5. Understanding of the service you want to create an MCP server for
+
+================================================================================
+STEP 1: CREATE THE MCP SERVER FROM TEMPLATE
+================================================================================
+
+1.1 Navigate to the mcp-servers directory:
+    cd /workspace/MCP/mcp-servers
+
+1.2 Run the automated creation script:
+    ./template/scripts/create_new_server.sh <server-name> <port> "<description>"
+    
+    Example:
+    ./template/scripts/create_new_server.sh my-api-service 8003 "My API Service MCP Server"
+    
+    Notes:
+    - Server name must be lowercase, alphanumeric with hyphens only
+    - Port should be between 8000-8999, next available is 8003
+    - Description should be clear and descriptive
+
+1.3 Verify the server was created:
+    ls -la src/mcp_servers/<server-name>/
+    
+    You should see:
+    - __init__.py
+    - server.py
+    - tenant_manager.py
+    - client.py
+
+================================================================================
+STEP 2: CUSTOMIZE THE SERVER CODE
+================================================================================
+
+2.1 Define Tenant Configuration (tenant_manager.py):
+
+    Edit: src/mcp_servers/<server-name>/tenant_manager.py
+    
+    a) Update SERVER_NAMETenantConfig class (replace SERVER_NAME with your server name):
+       - Add fields specific to your service (API keys, URLs, connection strings, etc.)
+       - Use Pydantic Field with descriptions
+       - Set appropriate defaults
+       
+       Example for API service:
+       class MyApiServiceTenantConfig(BaseModel):
+           tenant_id: str = Field(..., description="Unique identifier")
+           api_key: str = Field(..., description="API key for authentication")
+           api_url: str = Field(..., description="Base URL for API")
+           timeout: int = Field(default=30, description="Request timeout")
+       
+    b) Update register_tenant method:
+       - Create your service client/connection
+       - Store it in self.clients dictionary
+       - Example:
+         client = YourServiceClient(
+             api_key=config.api_key,
+             base_url=config.api_url,
+             timeout=config.timeout
+         )
+         self.clients[config.tenant_id] = client
+       
+    c) Update get_client method if needed:
+       - Ensure it returns the correct client type
+       - Handle connection errors appropriately
+       
+    d) Update load_tenant_from_env method:
+       - Read environment variables with pattern: <SERVER_NAME>_TENANT_<ID>_<KEY>
+       - Return None if tenant not configured
+       - Example:
+         api_key = os.getenv(f"{prefix}_API_KEY")
+         if not api_key:
+             return None
+         return MyApiServiceTenantConfig(...)
+
+2.2 Implement MCP Tools (server.py):
+
+    Edit: src/mcp_servers/<server-name>/server.py
+    
+    a) Replace SERVER_NAME with your server name in all imports and class names
+    
+    b) Update the example_tool or create new tools:
+       @mcp.tool
+       async def my_tool(
+           tenant_id: str,
+           param1: str,
+           param2: int = 10,
+           ctx: Optional[Context] = None,
+       ) -> Dict[str, Any]:
+           """Tool description - what it does."""
+           if ctx:
+               await ctx.info(f"Executing my_tool for tenant: {tenant_id}")
+           
+           # Get tenant-specific client
+           client = await tenant_manager.get_client(tenant_id)
+           
+           # Implement your logic here
+           result = await client.some_operation(param1, param2)
+           
+           return {
+               "success": True,
+               "result": result,
+               # Add your return data
+           }
+    
+    c) Update register_tenant tool:
+       - Ensure parameters match your TenantConfig model
+       - Update the tool description
+       - Verify return type is Dict[str, Any] (not Dict[str, str])
+    
+    d) Add request/response models if needed:
+       class MyRequest(BaseModel):
+           tenant_id: str
+           # Add your fields
+
+2.3 Update Resources (server.py):
+
+    Add or modify resources as needed:
+    @mcp.resource("SERVER_NAME://{tenant_id}/info")
+    async def get_info_resource(tenant_id: str) -> str:
+        """Get information about a tenant."""
+        # Implement resource logic
+        return json.dumps({"info": "..."}, indent=2)
+
+================================================================================
+STEP 3: ADD DEPENDENCIES
+================================================================================
+
+3.1 Update pyproject.toml:
+
+    Edit: pyproject.toml
+    
+    Add your service-specific dependencies to the dependencies list:
+    dependencies = [
+        # ... existing dependencies ...
+        "your-service-library>=1.0.0",
+        "httpx>=0.25.0",  # Example for HTTP clients
+    ]
+
+3.2 Update Dockerfile (if system dependencies needed):
+
+    Edit: Dockerfile
+    
+    If your service needs system packages, add them to the base stage:
+    RUN apt-get update && apt-get install -y \
+        gcc \
+        postgresql-client \
+        curl \
+        your-system-package \
+        && rm -rf /var/lib/apt/lists/*
+
+================================================================================
+STEP 4: ADD DOCKER CONFIGURATION
+================================================================================
+
+4.1 Add Dockerfile Stage:
+
+    Edit: Dockerfile
+    
+    Add a new stage after the base stage (before the calculator stage or at the end):
+    
+    # <Server-Name> stage
+    FROM base as <server-name>
+    COPY src/ ./src/
+    WORKDIR /app
+    ENV PYTHONPATH=/app/src
+    EXPOSE <port-number>
+    HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+        CMD curl -f http://localhost:<port-number>/health || exit 1
+    CMD ["fastmcp", "run", "src/mcp_servers/<server-name>/server.py", "--transport", "http", "--port", "<port-number>", "--host", "0.0.0.0"]
+    
+    Replace:
+    - <Server-Name> with your server's display name
+    - <server-name> with your server name (lowercase)
+    - <port-number> with your chosen port
+
+4.2 Add Docker Compose Service:
+
+    Edit: docker-compose.yml
+    
+    Add a new service in the services section:
+    
+    # <Server Description>
+    mcp-<server-name>-server:
+      build:
+        context: .
+        dockerfile: Dockerfile
+        target: <server-name>
+      container_name: mcp-<server-name>-server
+      ports:
+        - "<port-number>:<port-number>"
+      environment:
+        - SERVER_NAME=<Server Description>
+        - REDIS_HOST=redis
+        - REDIS_PORT=6379
+        - REDIS_DB=<redis-db-number>
+        # Add your tenant environment variables here
+        # Example:
+        # - <SERVER_NAME>_TENANT_1_API_KEY=${<SERVER_NAME>_TENANT_1_API_KEY:-default}
+        # - <SERVER_NAME>_TENANT_1_API_URL=${<SERVER_NAME>_TENANT_1_API_URL:-https://api.example.com}
+      restart: unless-stopped
+      networks:
+        - mcp-network
+      depends_on:
+        redis:
+          condition: service_healthy
+      healthcheck:
+        test: ["CMD", "curl", "-f", "http://localhost:<port-number>/health"]
+        interval: 30s
+        timeout: 10s
+        retries: 3
+        start_period: 10s
+    
+    Replace:
+    - <Server Description> with your server description
+    - <server-name> with your server name (lowercase, use hyphens)
+    - <port-number> with your chosen port
+    - <redis-db-number> with a unique Redis DB number (check existing services for used numbers)
+
+================================================================================
+STEP 5: CONFIGURE NGINX FOR HTTP AND SSE PROTOCOLS
+================================================================================
+
+5.1 Add Upstream Definition:
+
+    Edit: MCP/mcp-nginx/nginx.conf
+    
+    In the http block (before server blocks), add:
+    
+    upstream mcp_<server-name>_backend {
+        server mcp-<server-name>-server:<port-number>;
+        keepalive 32;
+    }
+    
+    Replace:
+    - <server-name> with your server name (lowercase, use underscores)
+    - <port-number> with your chosen port
+
+5.2 Add Location Blocks for HTTP and SSE:
+
+    Edit: MCP/mcp-nginx/nginx.conf
+    
+    Inside the HTTPS server block for mcp.bionicaisolutions.com, add these location blocks:
+    
+    # ========================================================================
+    # <Server Description> MCP Server
+    # ========================================================================
+    
+    # Main MCP endpoint - HTTP protocol
+    # Route: mcp.bionicaisolutions.com/<server-name>/mcp
+    location = /<server-name>/mcp {
+        proxy_pass http://mcp_<server-name>_backend/mcp;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Accept "application/json, text/event-stream";
+        proxy_buffering off;
+        proxy_cache off;
+        # Pass tenant headers if needed for multi-tenant mode
+        # proxy_set_header X-<Server-Name>-Tenant-Id $http_x_server_name_tenant_id;
+    }
+    
+    # Discovery endpoint - handles POST to /<server-name>/ (for Cursor discovery)
+    # Rewrites to /mcp for HTTP protocol
+    location = /<server-name>/ {
+        # Use mapped session ID (defaults to init-$request_id if not provided)
+        proxy_set_header Mcp-Session-Id $mcp_session_id;
+        proxy_http_version 1.1;
+        proxy_set_header Host 127.0.0.1:8000;
+        proxy_set_header Accept "application/json, text/event-stream";
+        
+        if ($request_method = POST) {
+            # For POST, rewrite to /mcp endpoint (HTTP protocol)
+            rewrite ^ /mcp break;
+            proxy_pass http://mcp_<server-name>_backend;
+            break;
+        }
+        # For GET, redirect to SSE endpoint
+        return 301 /<server-name>/sse;
+    }
+    
+    # SSE endpoint - Server-Sent Events protocol
+    # Route: mcp.bionicaisolutions.com/<server-name>/sse
+    # Handles both POST (for streamableHttp) and GET (for SSE connections)
+    location = /<server-name>/sse {
+        # Common proxy settings
+        proxy_http_version 1.1;
+        proxy_set_header Host 127.0.0.1:8000;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Accept "application/json, text/event-stream";
+        proxy_set_header Mcp-Session-Id $mcp_session_id;
+        proxy_buffering off;
+        proxy_cache off;
+        
+        # For POST, rewrite to /mcp (HTTP protocol)
+        if ($request_method = POST) {
+            rewrite ^ /mcp break;
+        }
+        # For GET, rewrite to /sse (SSE protocol)
+        rewrite ^/<server-name>/(.*) /$1 break;
+        proxy_pass http://mcp_<server-name>_backend;
+    }
+    
+    # Messages endpoint - handles /<server-name>/messages requests
+    # Used with session ID from SSE
+    location ~ ^/<server-name>/messages {
+        rewrite ^/<server-name>/messages(.*)$ /messages/$1 break;
+        proxy_pass http://mcp_<server-name>_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host 127.0.0.1:8000;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_buffering off;
+        proxy_cache off;
+    }
+    
+    # Message endpoint - handles /<server-name>/message requests (singular)
+    location ~ ^/<server-name>/message(?:s)?/? {
+        rewrite ^/<server-name>/message(s)?(.*)$ /messages$2 break;
+        proxy_pass http://mcp_<server-name>_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host 127.0.0.1:8000;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_buffering off;
+        proxy_cache off;
+    }
+    
+    # Catch-all for other /<server-name>/* paths
+    location /<server-name>/ {
+        rewrite ^/<server-name>/(.*) /$1 break;
+        proxy_pass http://mcp_<server-name>_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host 127.0.0.1:8000;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Accept "application/json, text/event-stream";
+        proxy_buffering off;
+        proxy_cache off;
+    }
+    
+    # Health check endpoint (no auth required)
+    location /<server-name>/health {
+        proxy_pass http://mcp_<server-name>_backend/health;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+    
+    Replace:
+    - <server-name> with your server name (lowercase, use hyphens in URLs)
+    - <Server-Name> with your server name in proper case (for headers)
+    - <Server Description> with your server description
+
+5.3 Update Default Location Block (Optional):
+
+    Edit: MCP/mcp-nginx/nginx.conf
+    
+    Update the default location block's error message to include your new server:
+    Add /<server-name>/mcp to the list of available endpoints
+
+================================================================================
+STEP 6: UPDATE CLIENT CONFIGURATION
+================================================================================
+
+6.1 Update Remote Client Config:
+
+    Edit: mcp_client_config_cursor_remote.json
+    
+    Add your server to the mcpServers object:
+    
+    {
+      "mcpServers": {
+        // ... existing servers ...
+        "<server-name>-mcp-remote": {
+          "url": "https://mcp.bionicaisolutions.com/<server-name>/mcp",
+          "description": "<Server Description> - External access via HTTPS"
+        }
+      }
+    }
+    
+    Replace:
+    - <server-name> with your server name
+    - <Server Description> with your server description
+
+================================================================================
+STEP 7: BUILD AND DEPLOY
+================================================================================
+
+7.1 Build the Docker Image:
+
+    cd /workspace/MCP/mcp-servers
+    docker compose build mcp-<server-name>-server
+    
+    Verify no build errors. If there are dependency issues, check pyproject.toml
+    and Dockerfile.
+
+7.2 Start the Server:
+
+    docker compose up -d mcp-<server-name>-server
+    
+    Verify it starts successfully:
+    docker compose ps | grep <server-name>
+
+7.3 Check Server Logs:
+
+    docker compose logs -f mcp-<server-name>-server
+    
+    Look for:
+    - Server startup messages
+    - Any error messages
+    - "Application startup complete"
+    - "Uvicorn running on http://0.0.0.0:<port>"
+
+7.4 Verify Health Check:
+
+    curl http://localhost:<port-number>/health
+    
+    Should return HTTP 200 or the health check response.
+
+7.5 Reload Nginx:
+
+    Find nginx container:
+    docker ps | grep nginx
+    
+    Reload nginx configuration:
+    docker exec <nginx-container-name> nginx -s reload
+    
+    Or restart if reload doesn't work:
+    docker restart <nginx-container-name>
+    
+    Verify nginx reloaded successfully:
+    docker logs <nginx-container-name> | tail -20
+
+================================================================================
+STEP 8: TEST THE DEPLOYMENT
+================================================================================
+
+8.1 Test Local HTTP Endpoint:
+
+    curl -X POST http://localhost:<port-number>/mcp \
+      -H "Content-Type: application/json" \
+      -H "Accept: application/json, text/event-stream" \
+      -d '{
+        "jsonrpc": "2.0",
+        "method": "initialize",
+        "params": {
+          "protocolVersion": "2024-11-05",
+          "capabilities": {},
+          "clientInfo": {
+            "name": "test-client",
+            "version": "1.0"
+          }
+        },
+        "id": 1
+      }'
+    
+    Expected: JSON-RPC response with server capabilities
+
+8.2 Test Remote HTTP Endpoint:
+
+    curl -X POST https://mcp.bionicaisolutions.com/<server-name>/mcp \
+      -H "Content-Type: application/json" \
+      -H "Accept: application/json, text/event-stream" \
+      -d '{
+        "jsonrpc": "2.0",
+        "method": "initialize",
+        "params": {
+          "protocolVersion": "2024-11-05",
+          "capabilities": {},
+          "clientInfo": {
+            "name": "test-client",
+            "version": "1.0"
+          }
+        },
+        "id": 1
+      }'
+    
+    Expected: Same JSON-RPC response as local test
+
+8.3 Test SSE Endpoint:
+
+    curl -N https://mcp.bionicaisolutions.com/<server-name>/sse \
+      -H "Accept: text/event-stream"
+    
+    Expected: SSE connection established (may show connection or wait for events)
+
+8.4 Test Tenant Registration (via MCP tool):
+
+    Create a test script or use MCP client to call register_tenant tool:
+    
+    Example using Python:
+    from fastmcp import Client
+    
+    async with Client("https://mcp.bionicaisolutions.com/<server-name>/mcp") as client:
+        result = await client.call_tool(
+            "register_tenant",
+            {
+                "tenant_id": "test-tenant",
+                # Add your tenant configuration parameters
+            }
+        )
+        print(result)
+
+8.5 Verify Redis Persistence:
+
+    docker exec mcp-redis redis-cli GET "mcp:<server-name>:tenant:test-tenant"
+    
+    Should return the tenant configuration JSON.
+
+8.6 Test Tool Execution:
+
+    Use MCP client to call your tools with the registered tenant:
+    
+    async with Client("https://mcp.bionicaisolutions.com/<server-name>/mcp") as client:
+        result = await client.call_tool(
+            "your_tool_name",
+            {
+                "tenant_id": "test-tenant",
+                # Add your tool parameters
+            }
+        )
+        print(result)
+
+================================================================================
+STEP 9: VERIFICATION CHECKLIST
+================================================================================
+
+Verify all items are complete:
+
+[ ] Server code created and customized
+[ ] Dependencies added to pyproject.toml
+[ ] Dockerfile stage added
+[ ] Docker compose service added
+[ ] Nginx upstream added
+[ ] Nginx location blocks added (HTTP and SSE)
+[ ] Client configuration updated
+[ ] Server builds without errors
+[ ] Server starts successfully
+[ ] Health check passes
+[ ] Local endpoint works (HTTP)
+[ ] Remote endpoint works (HTTP)
+[ ] SSE endpoint works
+[ ] Tenant registration works
+[ ] Tenant persistence in Redis works
+[ ] Tools execute successfully
+[ ] Server restarts and loads tenants from Redis
+
+================================================================================
+STEP 10: TROUBLESHOOTING
+================================================================================
+
+10.1 Server Won't Start:
+
+    Check logs:
+    docker compose logs mcp-<server-name>-server
+    
+    Common issues:
+    - Import errors: Check PYTHONPATH and import statements
+    - Missing dependencies: Verify pyproject.toml
+    - Port conflicts: Check if port is already in use
+    - Redis connection: Verify Redis is running and accessible
+
+10.2 Import Errors:
+
+    - Ensure try/except pattern for imports in server.py
+    - Verify PYTHONPATH=/app/src in Dockerfile
+    - Check all dependencies are in pyproject.toml
+    - Rebuild Docker image: docker compose build --no-cache mcp-<server-name>-server
+
+10.3 Nginx 502 Bad Gateway:
+
+    - Verify upstream server is running: docker ps | grep <server-name>
+    - Check nginx logs: docker logs <nginx-container>
+    - Verify upstream name matches in nginx.conf
+    - Check port number matches in upstream and docker-compose
+    - Verify network connectivity: docker network inspect mcp-servers_mcp-network
+
+10.4 Tenant Not Found:
+
+    - Check Redis: docker exec mcp-redis redis-cli GET "mcp:<server-name>:tenant:<tenant-id>"
+    - Verify tenant manager initialization in server logs
+    - Check environment variables if using env-based config
+    - Ensure tenant was registered successfully
+
+10.5 HTTP vs SSE Protocol Issues:
+
+    - Verify location blocks are correctly configured
+    - Check proxy_set_header Accept includes "text/event-stream"
+    - Ensure proxy_buffering is off for SSE
+    - Verify rewrite rules are correct
+    - Check session ID handling for SSE
+
+10.6 Connection Timeouts:
+
+    - Verify health check is passing
+    - Check server logs for errors
+    - Verify network configuration
+    - Check firewall rules
+    - Ensure keepalive is configured in upstream
+
+================================================================================
+ADDITIONAL NOTES
+================================================================================
+
+1. Port Assignment:
+   - Calculator: 8000
+   - Postgres: 8001
+   - MinIO: 8002
+   - Next available: 8003
+   - Use unique ports for each service
+
+2. Redis DB Assignment:
+   - Postgres: DB 0
+   - MinIO: DB 1
+   - Next available: DB 2
+   - Use unique DB numbers for isolation
+
+3. Naming Conventions:
+   - Server name: lowercase, kebab-case (e.g., my-api-service)
+   - Container name: mcp-<server-name>-server
+   - Upstream name: mcp_<server-name>_backend (use underscores)
+   - URL path: /<server-name>/mcp (use hyphens)
+
+4. Protocol Support:
+   - HTTP: Standard JSON-RPC over HTTP POST
+   - SSE: Server-Sent Events for streaming responses
+   - Both protocols are supported via different endpoints
+
+5. Security Considerations:
+   - Tenant credentials stored in Redis (consider encryption for production)
+   - Use HTTPS for remote access
+   - Implement authentication if needed
+   - Validate tenant IDs and parameters
+
+6. Performance:
+   - Connection pooling for database services
+   - Keepalive connections in nginx upstream
+   - Health checks to ensure service availability
+   - Proper error handling and logging
+
+================================================================================
+END OF INSTRUCTION SET
+================================================================================
+
+For additional help, refer to:
+- template/INTEGRATION_GUIDE.md - Detailed integration steps
+- template/TEMPLATE_OVERVIEW.md - Template structure and patterns
+- template/QUICK_START.md - Quick reference guide
+- Existing servers (postgres, minio) as examples
+

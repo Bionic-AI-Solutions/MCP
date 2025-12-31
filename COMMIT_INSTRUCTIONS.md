@@ -61,3 +61,4 @@ After deployment, the servers are available at:
 - `https://mcp.bionicaisolutions.com/postgres/mcp`
 - `https://mcp.bionicaisolutions.com/minio/mcp`
 
+

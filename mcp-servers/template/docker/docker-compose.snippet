@@ -1,0 +1,39 @@
+  # SERVER_NAME MCP Server
+  mcp-SERVER_NAME-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: SERVER_NAME
+    container_name: mcp-SERVER_NAME-server
+    ports:
+      - "PORT_NUMBER:PORT_NUMBER"
+    environment:
+      - SERVER_NAME=Server Name Server
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=REDIS_DB_NUMBER
+      # Add your tenant environment variables here
+      # Example:
+      # - SERVER_NAME_TENANT_1_API_KEY=${SERVER_NAME_TENANT_1_API_KEY:-default_key}
+      # - SERVER_NAME_TENANT_1_API_URL=${SERVER_NAME_TENANT_1_API_URL:-https://api.example.com}
+    restart: unless-stopped
+    networks:
+      - mcp-network
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:PORT_NUMBER/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+# Instructions:
+# 1. Replace SERVER_NAME with your actual server name (lowercase, use hyphens)
+# 2. Replace "Server Name Server" with your server's display name
+# 3. Replace PORT_NUMBER with your server's port (e.g., 8003)
+# 4. Replace REDIS_DB_NUMBER with a unique Redis DB number (0, 1, 2, etc.)
+# 5. Add your tenant environment variable templates
+# 6. Add this service to the main docker-compose.yml file
+

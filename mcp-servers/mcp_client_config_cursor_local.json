@@ -11,6 +11,10 @@
     "minio-mcp": {
       "url": "http://localhost:8002/mcp",
       "description": "MinIO MCP Server - Running in Docker"
+    },
+    "pdf-generator-mcp": {
+      "url": "http://localhost:8003/mcp",
+      "description": "PDF Generator MCP Server - Running in Docker"
     }
   }
 }

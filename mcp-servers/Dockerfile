@@ -8,6 +8,13 @@ RUN apt-get update && apt-get install -y \
     gcc \
     postgresql-client \
     curl \
+    libpango-1.0-0 \
+    libpangoft2-1.0-0 \
+    libharfbuzz0b \
+    libcairo2 \
+    libgdk-pixbuf-2.0-0 \
+    libffi-dev \
+    shared-mime-info \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv for faster dependency management
@@ -17,7 +24,7 @@ RUN pip install --no-cache-dir uv
 COPY pyproject.toml ./
 
 # Install dependencies (including fastmcp)
-RUN uv pip install --system fastmcp psycopg[binary,pool] minio pydantic python-dotenv redis
+RUN uv pip install --system fastmcp psycopg[binary,pool] minio pydantic python-dotenv redis weasyprint reportlab
 
 # Calculator stage
 FROM base as calculator
@@ -48,4 +55,29 @@ EXPOSE 8002
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8002/health || exit 1
 CMD ["fastmcp", "run", "src/mcp_servers/minio/server.py", "--transport", "http", "--port", "8002", "--host", "0.0.0.0"]
+
+# PDF Generator stage
+FROM base as pdf-generator
+# Install additional system dependencies for WeasyPrint
+RUN apt-get update && apt-get install -y \
+    libpango1.0-dev \
+    libcairo2-dev \
+    libgdk-pixbuf-2.0-dev \
+    libffi-dev \
+    libxml2-dev \
+    libxslt1-dev \
+    zlib1g-dev \
+    libharfbuzz-dev \
+    libraqm-dev \
+    libjpeg-dev \
+    && rm -rf /var/lib/apt/lists/*
+COPY src/ ./src/
+WORKDIR /app
+ENV PYTHONPATH=/app/src
+ENV PDF_TEMP_DIR=/tmp/pdf-reports
+ENV PDF_RETENTION_HOURS=24
+EXPOSE 8003
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8003/health || exit 1
+CMD ["fastmcp", "run", "src/mcp_servers/pdf-generator/server.py", "--transport", "http", "--port", "8003", "--host", "0.0.0.0"]
 
