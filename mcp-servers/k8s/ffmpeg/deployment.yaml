@@ -1,0 +1,98 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mcp-ffmpeg-config
+  namespace: mcp
+  labels:
+    app: mcp-ffmpeg-server
+    app.kubernetes.io/name: mcp-ffmpeg
+data:
+  SERVER_NAME: "FFmpeg Server"
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  REDIS_DB: "3"
+  PYTHONPATH: "/app/src"
+  FASTMCP_TRANSPORT: "http"
+  FASTMCP_HOST: "0.0.0.0"
+  FASTMCP_PORT: "8004"
+  FASTMCP_STATELESS_HTTP: "true"
+  FASTMCP_JSON_RESPONSE: "true"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-ffmpeg-server
+  namespace: mcp
+  labels:
+    app: mcp-ffmpeg-server
+    app.kubernetes.io/name: mcp-ffmpeg
+    app.kubernetes.io/component: server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-ffmpeg-server
+  template:
+    metadata:
+      labels:
+        app: mcp-ffmpeg-server
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: ubuntu
+      imagePullSecrets:
+        - name: dockerhub-pull-secret
+      containers:
+        - name: ffmpeg
+          image: docker.io/docker4zerocool/mcp-servers-ffmpeg:latest
+          imagePullPolicy: Always
+          command:
+            - python
+            - src/mcp_servers/ffmpeg/server.py
+          ports:
+            - containerPort: 8004
+              name: http
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: mcp-ffmpeg-config
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "300m"
+            limits:
+              memory: "2Gi"
+              cpu: "2000m"
+          livenessProbe:
+            tcpSocket:
+              port: 8004
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: 8004
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-ffmpeg-server
+  namespace: mcp
+  labels:
+    app: mcp-ffmpeg-server
+    app.kubernetes.io/name: mcp-ffmpeg
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8004
+      targetPort: 8004
+      protocol: TCP
+      name: http
+  selector:
+    app: mcp-ffmpeg-server

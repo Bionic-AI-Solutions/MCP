@@ -1,0 +1,54 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: mcp
+
+resources:
+  # Namespace
+  - namespace.yaml
+  
+  # Redis (required for multi-tenant servers)
+  - redis-pvc.yaml
+  - redis-service.yaml
+  
+  # MCP Server Deployments
+  - calculator/deployment.yaml
+  - postgres/deployment.yaml
+  - minio/deployment.yaml
+  - pdf-generator/deployment.yaml
+  - ffmpeg/deployment.yaml
+  - mail/deployment.yaml
+  
+  # Kong Ingress Routes
+  - kong/calculator-routes.yaml
+  - kong/postgres-routes.yaml
+  - kong/minio-routes.yaml
+  - kong/pdf-generator-routes.yaml
+  - kong/ffmpeg-routes.yaml
+  - kong/mail-routes.yaml
+
+# Image transformers - using Docker Hub images
+images:
+  - name: mcp-servers-calculator
+    newName: docker.io/docker4zerocool/mcp-servers-calculator
+    newTag: latest
+  - name: mcp-servers-postgres
+    newName: docker.io/docker4zerocool/mcp-servers-postgres
+    newTag: latest
+  - name: mcp-servers-minio
+    newName: docker.io/docker4zerocool/mcp-servers-minio
+    newTag: latest
+  - name: mcp-servers-pdf-generator
+    newName: docker.io/docker4zerocool/mcp-servers-pdf-generator
+    newTag: latest
+  - name: mcp-servers-ffmpeg
+    newName: docker.io/docker4zerocool/mcp-servers-ffmpeg
+    newTag: latest
+  - name: mcp-servers-mail
+    newName: docker.io/docker4zerocool/mcp-servers-mail
+    newTag: latest
+
+commonLabels:
+  app.kubernetes.io/part-of: mcp-servers
+  app.kubernetes.io/managed-by: kustomize
+

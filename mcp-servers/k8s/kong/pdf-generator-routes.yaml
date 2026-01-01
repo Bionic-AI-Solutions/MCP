@@ -1,0 +1,133 @@
+# Kong IngressRoute for PDF Generator MCP Server
+# Supports both HTTP (/mcp) and SSE (/sse) protocols
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mcp-pdf-generator-ingress
+  namespace: mcp
+  annotations:
+    konghq.com/strip-path: "false"
+    konghq.com/preserve-host: "true"
+    konghq.com/protocols: "https"
+    konghq.com/plugins: "mcp-pdf-generator-cors,mcp-pdf-generator-rate-limit,mcp-pdf-generator-path-rewrite"
+    konghq.com/request-buffer: "true"
+    konghq.com/client-max-body-size: "50m"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: kong
+  tls:
+    - hosts:
+        - mcp.baisoln.com
+      secretName: mcp-baisoln-com-tls
+  rules:
+    - host: mcp.baisoln.com
+      http:
+        paths:
+          # Main MCP endpoint - HTTP protocol
+          - path: /pdf-generator/mcp
+            pathType: Exact
+            backend:
+              service:
+                name: mcp-pdf-generator-server
+                port:
+                  number: 8003
+          # SSE endpoint - Server-Sent Events protocol
+          - path: /pdf-generator/sse
+            pathType: Exact
+            backend:
+              service:
+                name: mcp-pdf-generator-server
+                port:
+                  number: 8003
+          # Discovery endpoint - handles POST to /pdf-generator/ (for Cursor discovery)
+          - path: /pdf-generator/
+            pathType: Exact
+            backend:
+              service:
+                name: mcp-pdf-generator-server
+                port:
+                  number: 8003
+          # Messages endpoint - handles /pdf-generator/messages requests
+          - path: /pdf-generator/messages
+            pathType: Prefix
+            backend:
+              service:
+                name: mcp-pdf-generator-server
+                port:
+                  number: 8003
+          # Health check endpoint (no auth required)
+          - path: /pdf-generator/health
+            pathType: Exact
+            backend:
+              service:
+                name: mcp-pdf-generator-server
+                port:
+                  number: 8003
+
+---
+# CORS Plugin for PDF Generator
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: mcp-pdf-generator-cors
+  namespace: mcp
+  labels:
+    app: mcp-pdf-generator-server
+config:
+  origins:
+    - "*"
+  methods:
+    - GET
+    - POST
+    - OPTIONS
+  headers:
+    - Accept
+    - Content-Type
+    - Authorization
+    - X-API-Key
+    - Mcp-Session-Id
+  exposed_headers:
+    - Content-Type
+    - Content-Length
+  credentials: true
+  max_age: 3600
+plugin: cors
+
+---
+# Rate Limiting Plugin for PDF Generator
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: mcp-pdf-generator-rate-limit
+  namespace: mcp
+  labels:
+    app: mcp-pdf-generator-server
+config:
+  minute: 1000
+  hour: 10000
+  day: 100000
+  limit_by: ip
+  policy: local
+plugin: rate-limiting
+
+---
+# Path Rewrite Plugin for PDF Generator - Rewrites /pdf-generator/mcp to /mcp
+# Also ensures Accept header is set for FastMCP compatibility
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: mcp-pdf-generator-path-rewrite
+  namespace: mcp
+  labels:
+    app: mcp-pdf-generator-server
+config:
+  replace:
+    uri: "/mcp"
+  add:
+    headers:
+      - "Accept:application/json, text/event-stream"
+plugin: request-transformer
+
+---
+

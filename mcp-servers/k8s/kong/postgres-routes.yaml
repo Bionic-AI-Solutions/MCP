@@ -1,0 +1,130 @@
+# Kong IngressRoute for Postgres MCP Server
+# Supports both HTTP (/mcp) and SSE (/sse) protocols
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mcp-postgres-ingress
+  namespace: mcp
+  annotations:
+    konghq.com/strip-path: "false"
+    konghq.com/preserve-host: "true"
+    konghq.com/protocols: "https"
+    konghq.com/plugins: "mcp-postgres-cors,mcp-postgres-rate-limit,mcp-postgres-path-rewrite"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: kong
+  tls:
+    - hosts:
+        - mcp.baisoln.com
+      secretName: mcp-baisoln-com-tls
+  rules:
+    - host: mcp.baisoln.com
+      http:
+        paths:
+          # Main MCP endpoint - HTTP protocol
+          - path: /postgres/mcp
+            pathType: Exact
+            backend:
+              service:
+                name: mcp-postgres-server
+                port:
+                  number: 8001
+          # SSE endpoint - Server-Sent Events protocol
+          - path: /postgres/sse
+            pathType: Exact
+            backend:
+              service:
+                name: mcp-postgres-server
+                port:
+                  number: 8001
+          # Discovery endpoint - handles POST to /postgres/ (for Cursor discovery)
+          - path: /postgres/
+            pathType: Exact
+            backend:
+              service:
+                name: mcp-postgres-server
+                port:
+                  number: 8001
+          # Messages endpoint - handles /postgres/messages requests
+          - path: /postgres/messages
+            pathType: Prefix
+            backend:
+              service:
+                name: mcp-postgres-server
+                port:
+                  number: 8001
+          # Health check endpoint (no auth required)
+          - path: /postgres/health
+            pathType: Exact
+            backend:
+              service:
+                name: mcp-postgres-server
+                port:
+                  number: 8001
+
+---
+# CORS Plugin for Postgres
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: mcp-postgres-cors
+  namespace: mcp
+  labels:
+    app: mcp-postgres-server
+config:
+  origins:
+    - "*"
+  methods:
+    - GET
+    - POST
+    - OPTIONS
+  headers:
+    - Accept
+    - Content-Type
+    - Authorization
+    - X-API-Key
+    - Mcp-Session-Id
+  exposed_headers:
+    - Content-Type
+    - Content-Length
+  credentials: true
+  max_age: 3600
+plugin: cors
+
+---
+# Rate Limiting Plugin for Postgres
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: mcp-postgres-rate-limit
+  namespace: mcp
+  labels:
+    app: mcp-postgres-server
+config:
+  minute: 1000
+  hour: 10000
+  day: 100000
+  limit_by: ip
+  policy: local
+plugin: rate-limiting
+
+---
+# Path Rewrite Plugin for Postgres - Rewrites /postgres/mcp to /mcp
+# Also ensures Accept header is set for FastMCP compatibility
+# Note: This plugin only affects paths that match /postgres/mcp due to route matching
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: mcp-postgres-path-rewrite
+  namespace: mcp
+  labels:
+    app: mcp-postgres-server
+config:
+  replace:
+    uri: "/mcp"
+  add:
+    headers:
+      - "Accept:application/json, text/event-stream"
+plugin: request-transformer
+

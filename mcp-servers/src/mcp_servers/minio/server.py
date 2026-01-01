@@ -299,8 +299,21 @@ def minio_info() -> str:
 
 
 def main():
-    """Run the MinIO server."""
-    mcp.run()
+    """Run the MinIO server with HTTP transport for remote access."""
+    import os
+    # Use HTTP transport for remote access with native MCP protocol support
+    transport = os.getenv("FASTMCP_TRANSPORT", "http")
+    host = os.getenv("FASTMCP_HOST", "0.0.0.0")
+    port = int(os.getenv("FASTMCP_PORT", "8002"))
+    # Enable stateless HTTP mode for better compatibility with MCP clients like Cursor
+    # This allows each request to work independently without session management
+    stateless = os.getenv("FASTMCP_STATELESS_HTTP", "true").lower() == "true"
+    # Enable JSON response format for better Cursor compatibility
+    # JSON format returns plain JSON instead of SSE format
+    json_response = os.getenv("FASTMCP_JSON_RESPONSE", "true").lower() == "true"
+    # HTTP transport provides native MCP protocol support at /mcp endpoint
+    # FastMCP automatically handles streamable HTTP protocol
+    mcp.run(transport=transport, host=host, port=port, stateless_http=stateless, json_response=json_response)
 
 
 if __name__ == "__main__":

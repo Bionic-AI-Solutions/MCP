@@ -1,0 +1,148 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mcp-postgres-config
+  namespace: mcp
+  labels:
+    app: mcp-postgres-server
+    app.kubernetes.io/name: mcp-postgres
+data:
+  SERVER_NAME: "Postgres Server"
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
+  PYTHONPATH: "/app/src"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-postgres-server
+  namespace: mcp
+  labels:
+    app: mcp-postgres-server
+    app.kubernetes.io/name: mcp-postgres
+    app.kubernetes.io/component: server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-postgres-server
+  template:
+    metadata:
+      labels:
+        app: mcp-postgres-server
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: ubuntu
+      imagePullSecrets:
+        - name: dockerhub-pull-secret
+      containers:
+        - name: postgres
+          image: docker.io/docker4zerocool/mcp-servers-postgres:latest
+          imagePullPolicy: Always
+          command:
+            - python
+            - src/mcp_servers/postgres/server.py
+          ports:
+            - containerPort: 8001
+              name: http
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: mcp-postgres-config
+          env:
+            # Tenant configuration - these should be set via Secrets in production
+            - name: POSTGRES_TENANT_1_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-postgres-secrets
+                  key: tenant-1-host
+                  optional: true
+            - name: POSTGRES_TENANT_1_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-postgres-secrets
+                  key: tenant-1-port
+                  optional: true
+            - name: POSTGRES_TENANT_1_DB
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-postgres-secrets
+                  key: tenant-1-db
+                  optional: true
+            - name: POSTGRES_TENANT_1_USER
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-postgres-secrets
+                  key: tenant-1-user
+                  optional: true
+            - name: POSTGRES_TENANT_1_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-postgres-secrets
+                  key: tenant-1-password
+                  optional: true
+            - name: POSTGRES_TENANT_1_MIN_POOL_SIZE
+              value: "2"
+            - name: POSTGRES_TENANT_1_MAX_POOL_SIZE
+              value: "10"
+            - name: POSTGRES_TENANT_1_SSL
+              value: "false"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "200m"
+            limits:
+              memory: "512Mi"
+              cpu: "1000m"
+          livenessProbe:
+            tcpSocket:
+              port: 8001
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: 8001
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-postgres-server
+  namespace: mcp
+  labels:
+    app: mcp-postgres-server
+    app.kubernetes.io/name: mcp-postgres
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8001
+      targetPort: 8001
+      protocol: TCP
+      name: http
+  selector:
+    app: mcp-postgres-server
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mcp-postgres-secrets
+  namespace: mcp
+  labels:
+    app: mcp-postgres-server
+type: Opaque
+stringData:
+  tenant-1-host: "localhost"
+  tenant-1-port: "5432"
+  tenant-1-db: "mydb"
+  tenant-1-user: "postgres"
+  tenant-1-password: "password"
+

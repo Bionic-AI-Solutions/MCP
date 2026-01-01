@@ -1,0 +1,121 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mcp-ffmpeg-ingress
+  namespace: mcp
+  annotations:
+    konghq.com/strip-path: "false"
+    konghq.com/preserve-host: "true"
+    konghq.com/protocols: "https"
+    konghq.com/plugins: "mcp-ffmpeg-cors,mcp-ffmpeg-rate-limit,mcp-ffmpeg-path-rewrite"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: kong
+  tls:
+    - hosts:
+        - mcp.baisoln.com
+      secretName: mcp-baisoln-com-tls
+  rules:
+    - host: mcp.baisoln.com
+      http:
+        paths:
+          # Main MCP endpoint - HTTP protocol
+          - path: /ffmpeg/mcp
+            pathType: Exact
+            backend:
+              service:
+                name: mcp-ffmpeg-server
+                port:
+                  number: 8004
+          # SSE endpoint - Server-Sent Events protocol
+          - path: /ffmpeg/sse
+            pathType: Exact
+            backend:
+              service:
+                name: mcp-ffmpeg-server
+                port:
+                  number: 8004
+          # Discovery endpoint - handles POST to /ffmpeg/ (for Cursor discovery)
+          - path: /ffmpeg/
+            pathType: Exact
+            backend:
+              service:
+                name: mcp-ffmpeg-server
+                port:
+                  number: 8004
+          # Messages endpoint - handles /ffmpeg/messages requests
+          - path: /ffmpeg/messages
+            pathType: Prefix
+            backend:
+              service:
+                name: mcp-ffmpeg-server
+                port:
+                  number: 8004
+          # Message endpoint - handles /ffmpeg/message requests (singular)
+          - path: /ffmpeg/message
+            pathType: Prefix
+            backend:
+              service:
+                name: mcp-ffmpeg-server
+                port:
+                  number: 8004
+          # Health check endpoint (no auth required)
+          - path: /ffmpeg/health
+            pathType: Exact
+            backend:
+              service:
+                name: mcp-ffmpeg-server
+                port:
+                  number: 8004
+
+---
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: mcp-ffmpeg-cors
+  namespace: mcp
+config:
+  origins:
+    - "*"
+  methods:
+    - GET
+    - POST
+    - OPTIONS
+  headers:
+    - Accept
+    - Accept-Language
+    - Content-Language
+    - Content-Type
+    - Authorization
+  exposed_headers:
+    - Content-Length
+    - Content-Range
+  credentials: true
+  max_age: 3600
+plugin: cors
+
+---
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: mcp-ffmpeg-path-rewrite
+  namespace: mcp
+config:
+  replace:
+    uri: /mcp
+  add:
+    headers:
+      - "Accept:application/json, text/event-stream"
+plugin: request-transformer
+
+---
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: mcp-ffmpeg-rate-limit
+  namespace: mcp
+config:
+  minute: 100
+  hour: 1000
+  policy: local
+plugin: rate-limiting

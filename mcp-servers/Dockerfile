@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y \
     libgdk-pixbuf-2.0-0 \
     libffi-dev \
     shared-mime-info \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv for faster dependency management
@@ -24,7 +25,7 @@ RUN pip install --no-cache-dir uv
 COPY pyproject.toml ./
 
 # Install dependencies (including fastmcp)
-RUN uv pip install --system fastmcp psycopg[binary,pool] minio pydantic python-dotenv redis weasyprint reportlab
+RUN uv pip install --system fastmcp psycopg[binary,pool] minio pydantic python-dotenv redis weasyprint reportlab httpx email-validator
 
 # Calculator stage
 FROM base as calculator
@@ -80,4 +81,24 @@ EXPOSE 8003
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8003/health || exit 1
 CMD ["fastmcp", "run", "src/mcp_servers/pdf-generator/server.py", "--transport", "http", "--port", "8003", "--host", "0.0.0.0"]
+
+# FFmpeg stage
+FROM base as ffmpeg
+COPY src/ ./src/
+WORKDIR /app
+ENV PYTHONPATH=/app/src
+EXPOSE 8004
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8004/health || exit 1
+CMD ["fastmcp", "run", "src/mcp_servers/ffmpeg/server.py", "--transport", "http", "--port", "8004", "--host", "0.0.0.0"]
+
+# Mail stage
+FROM base as mail
+COPY src/ ./src/
+WORKDIR /app
+ENV PYTHONPATH=/app/src
+EXPOSE 8005
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8005/health || exit 1
+CMD ["fastmcp", "run", "src/mcp_servers/mail/server.py", "--transport", "http", "--port", "8005", "--host", "0.0.0.0"]
 

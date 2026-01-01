@@ -1,0 +1,18 @@
+# Let's Encrypt Certificate for mcp.baisoln.com
+# This will automatically provision and renew SSL certificates
+
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: mcp-baisoln-com-tls
+  namespace: mcp
+spec:
+  secretName: mcp-baisoln-com-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - mcp.baisoln.com
+  # Certificate will be automatically renewed before expiration
+
+

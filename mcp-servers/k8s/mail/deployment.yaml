@@ -1,0 +1,120 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mcp-mail-config
+  namespace: mcp
+  labels:
+    app: mcp-mail-server
+    app.kubernetes.io/name: mcp-mail
+data:
+  SERVER_NAME: "Mail Server"
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  REDIS_DB: "4"
+  PYTHONPATH: "/app/src"
+  # Default mail API URL using internal Kubernetes DNS
+  DEFAULT_MAIL_API_URL: "http://mail-service.mail"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-mail-server
+  namespace: mcp
+  labels:
+    app: mcp-mail-server
+    app.kubernetes.io/name: mcp-mail
+    app.kubernetes.io/component: server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-mail-server
+  template:
+    metadata:
+      labels:
+        app: mcp-mail-server
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: ubuntu
+      imagePullSecrets:
+        - name: dockerhub-pull-secret
+      containers:
+        - name: mail
+          image: docker.io/docker4zerocool/mcp-servers-mail:latest
+          imagePullPolicy: Always
+          command:
+            - python
+            - src/mcp_servers/mail/server.py
+          ports:
+            - containerPort: 8005
+              name: http
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: mcp-mail-config
+          env:
+            # Tenant configuration - these should be set via Secrets in production
+            - name: MAIL_TENANT_1_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-mail-secrets
+                  key: tenant-1-api-key
+                  optional: true
+            - name: MAIL_TENANT_1_MAIL_API_URL
+              value: "http://mail-service.mail"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "200m"
+            limits:
+              memory: "512Mi"
+              cpu: "1000m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8005
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8005
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-mail-server
+  namespace: mcp
+  labels:
+    app: mcp-mail-server
+    app.kubernetes.io/name: mcp-mail
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8005
+      targetPort: 8005
+      protocol: TCP
+      name: http
+  selector:
+    app: mcp-mail-server
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mcp-mail-secrets
+  namespace: mcp
+  labels:
+    app: mcp-mail-server
+type: Opaque
+stringData:
+  tenant-1-api-key: "your-jwt-token-here"
+

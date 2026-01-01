@@ -39,7 +39,16 @@ CMD ["fastmcp", "run", "src/mcp_servers/myservice/server.py", "--transport", "ht
 - 8000: Calculator
 - 8001: Postgres
 - 8002: MinIO
-- **Next available: 8003**
+- 8003: PDF Generator
+- **Next available: 8004**
+
+**Redis Database Numbers:**
+- postgres: 0
+- minio: 1
+- pdf-generator: 2
+- **Next available: 3**
+
+See `k8s/REDIS_DATABASE_PATTERN.md` for the complete database assignment pattern.
 
 ## Step 3: Add Nginx Configuration
 
@@ -123,7 +132,48 @@ docker exec <nginx-container-name> nginx -s reload
 docker restart <nginx-container-name>
 ```
 
-## Step 8: Verify Integration
+## Step 8: Add Kubernetes Deployment (Optional but Recommended)
+
+For production deployments, add Kubernetes manifests:
+
+1. **Copy template deployment**:
+   ```bash
+   mkdir -p k8s/<server-name>
+   cp template/k8s/deployment.yaml k8s/<server-name>/deployment.yaml
+   ```
+
+2. **Replace placeholders** in `k8s/<server-name>/deployment.yaml`:
+   - `<SERVER_NAME>` → your server name (lowercase, kebab-case)
+   - `<SERVER_DISPLAY_NAME>` → display name
+   - `<PORT_NUMBER>` → unique port (8000-8999)
+   - `<REDIS_DB_NUMBER>` → next available Redis DB number (see `k8s/REDIS_DATABASE_PATTERN.md`)
+
+3. **Add server-specific configuration**:
+   - Update ConfigMap with server-specific environment variables
+   - Add tenant configuration environment variables if needed
+   - Configure volume mounts if persistent storage is required
+
+4. **Update kustomization.yaml**:
+   ```yaml
+   resources:
+     # ... existing resources ...
+     - <server-name>/deployment.yaml
+   ```
+
+5. **Deploy to Kubernetes**:
+   ```bash
+   kubectl apply -k k8s/
+   ```
+
+6. **Verify deployment**:
+   ```bash
+   kubectl get pods -n mcp -l app=mcp-<server-name>-server
+   kubectl logs -n mcp -l app=mcp-<server-name>-server
+   ```
+
+**Important**: Ensure Redis persistence is configured (see `k8s/redis-pvc.yaml` and `k8s/REDIS_DATABASE_PATTERN.md`).
+
+## Step 9: Verify Integration
 
 ### Checklist
 
@@ -135,7 +185,9 @@ docker restart <nginx-container-name>
 - [ ] Can register a tenant via MCP tool
 - [ ] Can use tools with registered tenant
 - [ ] Tenant configuration persists in Redis
+- [ ] Redis persistence is configured (Kubernetes)
 - [ ] Server restarts and loads tenants from Redis
+- [ ] Redis pod restart preserves tenant data (Kubernetes with PVC)
 
 ### Verification Commands
 

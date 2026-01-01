@@ -136,6 +136,35 @@ services:
       retries: 3
       start_period: 10s
 
+  # Mail MCP Server
+  mcp-mail-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: mail
+    container_name: mcp-mail-server
+    ports:
+      - "8005:8005"
+    environment:
+      - SERVER_NAME=Mail Server
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=3
+      - MAIL_TENANT_1_API_KEY=${MAIL_TENANT_1_API_KEY:-}
+      - MAIL_TENANT_1_MAIL_API_URL=${MAIL_TENANT_1_MAIL_API_URL:-http://mail-service.mail:8000}
+    restart: unless-stopped
+    networks:
+      - mcp-network
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
 networks:
   mcp-network:
     driver: bridge

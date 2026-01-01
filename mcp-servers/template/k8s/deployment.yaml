@@ -1,0 +1,140 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mcp-<SERVER_NAME>-config
+  namespace: mcp
+  labels:
+    app: mcp-<SERVER_NAME>-server
+    app.kubernetes.io/name: mcp-<SERVER_NAME>
+data:
+  SERVER_NAME: "<SERVER_DISPLAY_NAME>"
+  # Redis configuration for tenant persistence
+  # IMPORTANT: Use a unique REDIS_DB number for each MCP server
+  # Database numbering pattern:
+  #   - postgres: 0
+  #   - minio: 1
+  #   - pdf-generator: 2
+  #   - calculator: N/A (stateless, no Redis needed)
+  #   - <SERVER_NAME>: <NEXT_AVAILABLE_NUMBER>
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  REDIS_DB: "<REDIS_DB_NUMBER>"
+  PYTHONPATH: "/app/src"
+  # Add server-specific configuration here
+  # EXAMPLE_CONFIG: "example-value"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-<SERVER_NAME>-server
+  namespace: mcp
+  labels:
+    app: mcp-<SERVER_NAME>-server
+    app.kubernetes.io/name: mcp-<SERVER_NAME>
+    app.kubernetes.io/component: server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-<SERVER_NAME>-server
+  template:
+    metadata:
+      labels:
+        app: mcp-<SERVER_NAME>-server
+    spec:
+      # Remove nodeSelector if not needed for your cluster
+      # nodeSelector:
+      #   kubernetes.io/hostname: ubuntu
+      imagePullSecrets:
+        - name: dockerhub-pull-secret
+      containers:
+        - name: <SERVER_NAME>
+          image: docker.io/docker4zerocool/mcp-servers-<SERVER_NAME>:latest
+          imagePullPolicy: Always
+          command:
+            - python
+            - src/mcp_servers/<SERVER_NAME>/server.py
+          ports:
+            - containerPort: <PORT_NUMBER>
+              name: http
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: mcp-<SERVER_NAME>-config
+          env:
+            # Add tenant configuration environment variables here
+            # These should be set via Secrets in production
+            # Example for database services:
+            # - name: <SERVER_NAME>_TENANT_1_HOST
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: mcp-<SERVER_NAME>-secrets
+            #       key: tenant-1-host
+            #       optional: true
+          # Add volumeMounts if needed for persistent storage
+          # volumeMounts:
+          #   - name: <SERVER_NAME>-data
+          #     mountPath: /data
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "200m"
+            limits:
+              memory: "512Mi"
+              cpu: "1000m"
+          livenessProbe:
+            tcpSocket:
+              port: <PORT_NUMBER>
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: <PORT_NUMBER>
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+      # Add volumes if needed for persistent storage
+      # volumes:
+      #   - name: <SERVER_NAME>-data
+      #     persistentVolumeClaim:
+      #       claimName: <SERVER_NAME>-data-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-<SERVER_NAME>-server
+  namespace: mcp
+  labels:
+    app: mcp-<SERVER_NAME>-server
+    app.kubernetes.io/name: mcp-<SERVER_NAME>
+spec:
+  type: ClusterIP
+  ports:
+    - port: <PORT_NUMBER>
+      targetPort: <PORT_NUMBER>
+      protocol: TCP
+      name: http
+  selector:
+    app: mcp-<SERVER_NAME>-server
+
+---
+# Uncomment and customize if you need secrets for tenant configuration
+# apiVersion: v1
+# kind: Secret
+# metadata:
+#   name: mcp-<SERVER_NAME>-secrets
+#   namespace: mcp
+#   labels:
+#     app: mcp-<SERVER_NAME>-server
+# type: Opaque
+# stringData:
+#   tenant-1-host: "localhost"
+#   tenant-1-port: "5432"
+#   tenant-1-user: "user"
+#   tenant-1-password: "password"
+

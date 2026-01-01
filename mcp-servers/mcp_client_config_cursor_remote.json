@@ -15,6 +15,10 @@
     "pdf-generator-mcp-remote": {
       "url": "https://mcp.bionicaisolutions.com/pdf-generator/mcp",
       "description": "PDF Generator MCP Server - External access via HTTPS"
+    },
+    "mail-mcp-remote": {
+      "url": "https://mcp.bionicaisolutions.com/mail/mcp",
+      "description": "Mail Service MCP Server - External access via HTTPS"
     }
   }
 }

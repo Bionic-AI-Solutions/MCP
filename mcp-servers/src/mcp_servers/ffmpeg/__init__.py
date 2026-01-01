@@ -1,0 +1,1 @@
+"""FFmpeg MCP Server."""

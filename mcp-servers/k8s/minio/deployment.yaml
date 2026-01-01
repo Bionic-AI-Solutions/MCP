@@ -1,0 +1,132 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mcp-minio-config
+  namespace: mcp
+  labels:
+    app: mcp-minio-server
+    app.kubernetes.io/name: mcp-minio
+data:
+  SERVER_NAME: "MinIO Server"
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  REDIS_DB: "1"
+  PYTHONPATH: "/app/src"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-minio-server
+  namespace: mcp
+  labels:
+    app: mcp-minio-server
+    app.kubernetes.io/name: mcp-minio
+    app.kubernetes.io/component: server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-minio-server
+  template:
+    metadata:
+      labels:
+        app: mcp-minio-server
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: ubuntu
+      imagePullSecrets:
+        - name: dockerhub-pull-secret
+      containers:
+        - name: minio
+          image: docker.io/docker4zerocool/mcp-servers-minio:latest
+          imagePullPolicy: Always
+          command:
+            - python
+            - src/mcp_servers/minio/server.py
+          ports:
+            - containerPort: 8002
+              name: http
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: mcp-minio-config
+          env:
+            # Tenant configuration - these should be set via Secrets in production
+            - name: MINIO_TENANT_1_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-minio-secrets
+                  key: tenant-1-endpoint
+                  optional: true
+            - name: MINIO_TENANT_1_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-minio-secrets
+                  key: tenant-1-access-key
+                  optional: true
+            - name: MINIO_TENANT_1_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-minio-secrets
+                  key: tenant-1-secret-key
+                  optional: true
+            - name: MINIO_TENANT_1_SECURE
+              value: "false"
+            - name: MINIO_TENANT_1_REGION
+              value: "us-east-1"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "200m"
+            limits:
+              memory: "512Mi"
+              cpu: "1000m"
+          livenessProbe:
+            tcpSocket:
+              port: 8002
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: 8002
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-minio-server
+  namespace: mcp
+  labels:
+    app: mcp-minio-server
+    app.kubernetes.io/name: mcp-minio
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8002
+      targetPort: 8002
+      protocol: TCP
+      name: http
+  selector:
+    app: mcp-minio-server
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mcp-minio-secrets
+  namespace: mcp
+  labels:
+    app: mcp-minio-server
+type: Opaque
+stringData:
+  tenant-1-endpoint: "localhost:9000"
+  tenant-1-access-key: "minioadmin"
+  tenant-1-secret-key: "minioadmin123"
+

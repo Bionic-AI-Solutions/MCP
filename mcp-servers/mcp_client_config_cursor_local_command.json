@@ -37,6 +37,17 @@
         "REDIS_PORT": "6379",
         "REDIS_DB": "2"
       }
+    },
+    "mail-mcp": {
+      "command": "/workspace/MCP/mcp-servers/.venv/bin/fastmcp",
+      "args": ["run", "/workspace/MCP/mcp-servers/src/mcp_servers/mail/server.py"],
+      "cwd": "/workspace/MCP/mcp-servers",
+      "env": {
+        "PYTHONPATH": "/workspace/MCP/mcp-servers/src",
+        "REDIS_HOST": "localhost",
+        "REDIS_PORT": "6379",
+        "REDIS_DB": "3"
+      }
     }
   }
 }
