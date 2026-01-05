@@ -58,6 +58,7 @@ kubectl wait --for=condition=available --timeout=300s deployment/mcp-calculator-
 kubectl wait --for=condition=available --timeout=300s deployment/mcp-postgres-server -n $NAMESPACE || true
 kubectl wait --for=condition=available --timeout=300s deployment/mcp-minio-server -n $NAMESPACE || true
 kubectl wait --for=condition=available --timeout=300s deployment/mcp-pdf-generator-server -n $NAMESPACE || true
+kubectl wait --for=condition=available --timeout=300s deployment/mcp-openproject-server -n $NAMESPACE || true
 
 # Show status
 echo ""
@@ -73,8 +74,9 @@ echo ""
 echo "Deployment complete!"
 echo ""
 echo "Test endpoints:"
-echo "  Calculator: https://mcp.baisoln.com/calculator/health"
-echo "  Postgres:   https://mcp.baisoln.com/postgres/health"
-echo "  MinIO:      https://mcp.baisoln.com/minio/health"
-echo "  PDF Gen:    https://mcp.baisoln.com/pdf-generator/health"
+echo "  Calculator:   https://mcp.baisoln.com/calculator/health"
+echo "  Postgres:     https://mcp.baisoln.com/postgres/health"
+echo "  MinIO:        https://mcp.baisoln.com/minio/health"
+echo "  PDF Gen:      https://mcp.baisoln.com/pdf-generator/health"
+echo "  OpenProject:  https://mcp.baisoln.com/openproject/health"
 

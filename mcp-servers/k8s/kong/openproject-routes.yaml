@@ -1,0 +1,138 @@
+# Kong IngressRoute for OpenProject MCP Server
+# Supports both HTTP (/mcp) and SSE (/sse) protocols
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mcp-openproject-ingress
+  namespace: mcp
+  annotations:
+    konghq.com/strip-path: "false"
+    konghq.com/preserve-host: "true"
+    konghq.com/protocols: "https"
+    konghq.com/plugins: "mcp-openproject-cors,mcp-openproject-rate-limit,mcp-openproject-path-rewrite"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: kong
+  tls:
+    - hosts:
+        - mcp.baisoln.com
+      secretName: mcp-baisoln-com-tls
+  rules:
+    - host: mcp.baisoln.com
+      http:
+        paths:
+          # Main MCP endpoint - HTTP protocol
+          - path: /openproject/mcp
+            pathType: Exact
+            backend:
+              service:
+                name: mcp-openproject-server
+                port:
+                  number: 8006
+          # SSE endpoint - Server-Sent Events protocol
+          - path: /openproject/sse
+            pathType: Exact
+            backend:
+              service:
+                name: mcp-openproject-server
+                port:
+                  number: 8006
+          # Discovery endpoint - handles POST to /openproject/ (for Cursor discovery)
+          - path: /openproject/
+            pathType: Exact
+            backend:
+              service:
+                name: mcp-openproject-server
+                port:
+                  number: 8006
+          # Messages endpoint - handles /openproject/messages requests
+          - path: /openproject/messages
+            pathType: Prefix
+            backend:
+              service:
+                name: mcp-openproject-server
+                port:
+                  number: 8006
+          # Message endpoint - handles /openproject/message requests (singular)
+          - path: /openproject/message
+            pathType: Prefix
+            backend:
+              service:
+                name: mcp-openproject-server
+                port:
+                  number: 8006
+          # Health check endpoint (no auth required)
+          - path: /openproject/health
+            pathType: Exact
+            backend:
+              service:
+                name: mcp-openproject-server
+                port:
+                  number: 8006
+
+---
+# CORS Plugin for OpenProject
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: mcp-openproject-cors
+  namespace: mcp
+  labels:
+    app: mcp-openproject-server
+config:
+  origins:
+    - "*"
+  methods:
+    - GET
+    - POST
+    - OPTIONS
+  headers:
+    - Accept
+    - Content-Type
+    - Authorization
+    - X-API-Key
+    - Mcp-Session-Id
+  exposed_headers:
+    - Content-Type
+    - Content-Length
+  credentials: true
+  max_age: 3600
+plugin: cors
+
+---
+# Rate Limiting Plugin for OpenProject
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: mcp-openproject-rate-limit
+  namespace: mcp
+  labels:
+    app: mcp-openproject-server
+config:
+  minute: 1000
+  hour: 10000
+  day: 100000
+  limit_by: ip
+  policy: local
+plugin: rate-limiting
+
+---
+# Path Rewrite Plugin for OpenProject - Rewrites /openproject/mcp to /mcp
+# Also ensures Accept header is set for FastMCP compatibility
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: mcp-openproject-path-rewrite
+  namespace: mcp
+  labels:
+    app: mcp-openproject-server
+config:
+  replace:
+    uri: "/mcp"
+  add:
+    headers:
+      - "Accept:application/json, text/event-stream"
+plugin: request-transformer
+
+

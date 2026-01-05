@@ -1,0 +1,133 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mcp-openproject-config
+  namespace: mcp
+  labels:
+    app: mcp-openproject-server
+    app.kubernetes.io/name: mcp-openproject
+data:
+  SERVER_NAME: "OpenProject Server"
+  PYTHONPATH: "/app/src"
+  LOG_LEVEL: "INFO"
+  TEST_CONNECTION_ON_STARTUP: "true"
+  FASTMCP_TRANSPORT: "http"
+  FASTMCP_HOST: "0.0.0.0"
+  FASTMCP_PORT: "8006"
+  FASTMCP_STATELESS_HTTP: "true"
+  FASTMCP_JSON_RESPONSE: "true"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-openproject-server
+  namespace: mcp
+  labels:
+    app: mcp-openproject-server
+    app.kubernetes.io/name: mcp-openproject
+    app.kubernetes.io/component: server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-openproject-server
+  template:
+    metadata:
+      labels:
+        app: mcp-openproject-server
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: ubuntu
+      imagePullSecrets:
+        - name: dockerhub-pull-secret
+      containers:
+        - name: openproject
+          image: docker.io/docker4zerocool/mcp-servers-openproject:latest
+          imagePullPolicy: Always
+          command:
+            - python
+            - src/mcp_servers/openproject/server.py
+          ports:
+            - containerPort: 8006
+              name: http
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: mcp-openproject-config
+          env:
+            # OpenProject configuration - these should be set via Secrets in production
+            - name: OPENPROJECT_URL
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-openproject-secrets
+                  key: openproject-url
+            - name: OPENPROJECT_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-openproject-secrets
+                  key: openproject-api-key
+            - name: OPENPROJECT_PROXY
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-openproject-secrets
+                  key: openproject-proxy
+                  optional: true
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "200m"
+            limits:
+              memory: "512Mi"
+              cpu: "1000m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8006
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8006
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-openproject-server
+  namespace: mcp
+  labels:
+    app: mcp-openproject-server
+    app.kubernetes.io/name: mcp-openproject
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8006
+      targetPort: 8006
+      protocol: TCP
+      name: http
+  selector:
+    app: mcp-openproject-server
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mcp-openproject-secrets
+  namespace: mcp
+  labels:
+    app: mcp-openproject-server
+type: Opaque
+stringData:
+  openproject-url: "https://op.zippio.ai"
+  openproject-api-key: "8d80002b7ec260d9ed2bf449e3302834bd1f5e415f916762b2e1040454858198"
+  openproject-proxy: ""
+
+

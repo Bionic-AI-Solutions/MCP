@@ -42,6 +42,10 @@ echo ""
 echo "Building mail image..."
 docker build --target mail -t "$IMAGE_REGISTRY/$IMAGE_NAME-mail:$IMAGE_TAG" .
 
+echo ""
+echo "Building openproject image..."
+docker build --target openproject -t "$IMAGE_REGISTRY/$IMAGE_NAME-openproject:$IMAGE_TAG" .
+
 # Optionally push images
 if [ "${PUSH_IMAGES:-false}" = "true" ]; then
     echo ""
@@ -52,6 +56,7 @@ if [ "${PUSH_IMAGES:-false}" = "true" ]; then
     docker push "$IMAGE_REGISTRY/$IMAGE_NAME-pdf-generator:$IMAGE_TAG"
     docker push "$IMAGE_REGISTRY/$IMAGE_NAME-ffmpeg:$IMAGE_TAG"
     docker push "$IMAGE_REGISTRY/$IMAGE_NAME-mail:$IMAGE_TAG"
+    docker push "$IMAGE_REGISTRY/$IMAGE_NAME-openproject:$IMAGE_TAG"
 fi
 
 echo ""
@@ -64,6 +69,7 @@ echo "  - $IMAGE_REGISTRY/$IMAGE_NAME-minio:$IMAGE_TAG"
 echo "  - $IMAGE_REGISTRY/$IMAGE_NAME-pdf-generator:$IMAGE_TAG"
 echo "  - $IMAGE_REGISTRY/$IMAGE_NAME-ffmpeg:$IMAGE_TAG"
 echo "  - $IMAGE_REGISTRY/$IMAGE_NAME-mail:$IMAGE_TAG"
+echo "  - $IMAGE_REGISTRY/$IMAGE_NAME-openproject:$IMAGE_TAG"
 
 
 

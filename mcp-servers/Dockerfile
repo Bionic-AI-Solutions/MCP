@@ -25,7 +25,7 @@ RUN pip install --no-cache-dir uv
 COPY pyproject.toml ./
 
 # Install dependencies (including fastmcp)
-RUN uv pip install --system fastmcp psycopg[binary,pool] minio pydantic python-dotenv redis weasyprint reportlab httpx email-validator
+RUN uv pip install --system fastmcp psycopg[binary,pool] minio pydantic python-dotenv redis weasyprint reportlab httpx email-validator aiohttp
 
 # Calculator stage
 FROM base as calculator
@@ -101,4 +101,14 @@ EXPOSE 8005
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8005/health || exit 1
 CMD ["fastmcp", "run", "src/mcp_servers/mail/server.py", "--transport", "http", "--port", "8005", "--host", "0.0.0.0"]
+
+# OpenProject stage
+FROM base as openproject
+COPY src/ ./src/
+WORKDIR /app
+ENV PYTHONPATH=/app/src
+EXPOSE 8006
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8006/health || exit 1
+CMD ["fastmcp", "run", "src/mcp_servers/openproject/server.py", "--transport", "http", "--port", "8006", "--host", "0.0.0.0"]
 

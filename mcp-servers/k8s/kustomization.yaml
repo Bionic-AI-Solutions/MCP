@@ -18,6 +18,7 @@ resources:
   - pdf-generator/deployment.yaml
   - ffmpeg/deployment.yaml
   - mail/deployment.yaml
+  - openproject/deployment.yaml
   
   # Kong Ingress Routes
   - kong/calculator-routes.yaml
@@ -26,6 +27,7 @@ resources:
   - kong/pdf-generator-routes.yaml
   - kong/ffmpeg-routes.yaml
   - kong/mail-routes.yaml
+  - kong/openproject-routes.yaml
 
 # Image transformers - using Docker Hub images
 images:
@@ -46,6 +48,9 @@ images:
     newTag: latest
   - name: mcp-servers-mail
     newName: docker.io/docker4zerocool/mcp-servers-mail
+    newTag: latest
+  - name: mcp-servers-openproject
+    newName: docker.io/docker4zerocool/mcp-servers-openproject
     newTag: latest
 
 commonLabels:
