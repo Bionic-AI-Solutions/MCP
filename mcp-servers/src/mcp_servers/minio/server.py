@@ -61,7 +61,7 @@ class ObjectOperationRequest(BaseModel):
 # ============================================================================
 
 @mcp.tool
-async def list_buckets(
+async def minio_list_buckets(
     tenant_id: str,
     ctx: Optional[Context] = None,
 ) -> Dict[str, Any]:
@@ -87,7 +87,7 @@ async def list_buckets(
 
 
 @mcp.tool
-async def create_bucket(
+async def minio_create_bucket(
     tenant_id: str,
     bucket_name: str,
     region: Optional[str] = None,
@@ -106,7 +106,7 @@ async def create_bucket(
 
 
 @mcp.tool
-async def delete_bucket(
+async def minio_delete_bucket(
     tenant_id: str,
     bucket_name: str,
     ctx: Optional[Context] = None,
@@ -124,7 +124,7 @@ async def delete_bucket(
 
 
 @mcp.tool
-async def bucket_exists(
+async def minio_bucket_exists(
     tenant_id: str,
     bucket_name: str,
     ctx: Optional[Context] = None,
@@ -142,7 +142,7 @@ async def bucket_exists(
 
 
 @mcp.tool
-async def list_objects(
+async def minio_list_objects(
     tenant_id: str,
     bucket_name: str,
     prefix: Optional[str] = None,
@@ -173,7 +173,7 @@ async def list_objects(
 
 
 @mcp.tool
-async def upload_object(
+async def minio_upload_object(
     tenant_id: str,
     bucket_name: str,
     object_name: str,
@@ -204,7 +204,7 @@ async def upload_object(
 
 
 @mcp.tool
-async def download_object(
+async def minio_download_object(
     tenant_id: str,
     bucket_name: str,
     object_name: str,
@@ -231,7 +231,7 @@ async def download_object(
 
 
 @mcp.tool
-async def delete_object(
+async def minio_delete_object(
     tenant_id: str,
     bucket_name: str,
     object_name: str,
@@ -250,7 +250,7 @@ async def delete_object(
 
 
 @mcp.tool
-async def register_tenant(
+async def minio_register_tenant(
     tenant_id: str,
     endpoint: str,
     access_key: str,

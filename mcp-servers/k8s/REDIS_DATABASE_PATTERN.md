@@ -102,3 +102,7 @@ kubectl exec -n mcp redis-<pod-name> -- redis-cli -n 1 KEYS "mcp:minio:*"
 4. **Monitor storage** - Check PVC usage as tenant count grows
 5. **Backup strategy** - Consider backing up Redis data for disaster recovery
 
+
+
+
+

@@ -20,7 +20,7 @@ async def main():
         tenant_id = "1"
         print(f"\n=== Registering tenant: {tenant_id} ===")
         result = await client.call_tool(
-            "register_tenant",
+            "mail_register_tenant",
             {
                 "tenant_id": tenant_id,
                 "api_key": "your-jwt-token-here",
@@ -32,7 +32,7 @@ async def main():
         # Send an email
         print(f"\n=== Sending email for tenant: {tenant_id} ===")
         result = await client.call_tool(
-            "send_email",
+            "mail_send_email",
             {
                 "tenant_id": tenant_id,
                 "to": ["recipient@example.com"],
@@ -46,7 +46,7 @@ async def main():
         # Send bulk emails
         print(f"\n=== Sending bulk emails ===")
         result = await client.call_tool(
-            "send_bulk_emails",
+            "mail_send_bulk_emails",
             {
                 "tenant_id": tenant_id,
                 "emails": [
@@ -68,4 +68,5 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 

@@ -20,7 +20,7 @@ async def main():
         tenant_id = "1"
         print(f"\n=== Registering tenant: {tenant_id} ===")
         result = await client.call_tool(
-            "register_tenant",
+            "pg_register_tenant",
             {
                 "tenant_id": tenant_id,
                 "host": "localhost",
@@ -34,13 +34,13 @@ async def main():
         
         # List tables
         print(f"\n=== Listing tables for tenant: {tenant_id} ===")
-        result = await client.call_tool("list_tables", {"tenant_id": tenant_id})
+        result = await client.call_tool("pg_list_tables", {"tenant_id": tenant_id})
         print(f"Tables: {result.content[0].text}")
         
         # Describe a table (if exists)
         print(f"\n=== Describing table 'users' ===")
         result = await client.call_tool(
-            "describe_table",
+            "pg_describe_table",
             {"tenant_id": tenant_id, "table_name": "users"},
         )
         print(f"Table info: {result.content[0].text}")
@@ -48,7 +48,7 @@ async def main():
         # Execute a query
         print(f"\n=== Executing query ===")
         result = await client.call_tool(
-            "execute_query",
+            "pg_execute_query",
             {
                 "tenant_id": tenant_id,
                 "query": "SELECT version();",

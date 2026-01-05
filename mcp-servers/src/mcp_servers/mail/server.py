@@ -83,7 +83,7 @@ class AttachmentInput(BaseModel):
 # ============================================================================
 
 @mcp.tool
-async def send_email(
+async def mail_send_email(
     tenant_id: str,
     to: List[EmailStr],
     subject: str,
@@ -151,7 +151,7 @@ async def send_email(
 
 
 @mcp.tool
-async def send_email_with_attachments(
+async def mail_send_email_with_attachments(
     tenant_id: str,
     to: List[EmailStr],
     subject: str,
@@ -251,7 +251,7 @@ async def send_email_with_attachments(
 
 
 @mcp.tool
-async def send_bulk_emails(
+async def mail_send_bulk_emails(
     tenant_id: str,
     emails: List[Dict[str, Any]],
     ctx: Optional[Context] = None,
@@ -322,7 +322,7 @@ async def send_bulk_emails(
 
 
 @mcp.tool
-async def register_tenant(
+async def mail_register_tenant(
     tenant_id: str,
     api_key: str,
     mail_api_url: Optional[str] = None,

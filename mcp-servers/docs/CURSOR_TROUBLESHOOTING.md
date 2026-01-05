@@ -203,3 +203,7 @@ If the server is working (verified by curl tests) but Cursor still shows "Loadin
 The server is correctly configured and responding. If Cursor still shows "Loading tools", the issue is likely with Cursor's connection or caching. A full restart usually resolves this.
 
 
+
+
+
+

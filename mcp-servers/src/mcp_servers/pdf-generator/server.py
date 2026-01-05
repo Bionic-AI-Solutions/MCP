@@ -122,7 +122,7 @@ def generate_pdf_from_html(html_content: str, output_path: str) -> None:
 # ============================================================================
 
 @mcp.tool
-async def generate_pdf(
+async def pdf_generate_pdf(
     tenant_id: str,
     template: str,
     content: Dict[str, Any],
@@ -210,7 +210,7 @@ async def generate_pdf(
 
 
 @mcp.tool
-async def get_pdf_file(
+async def pdf_get_pdf_file(
     file_id: str,
     ctx: Optional[Context] = None,
 ) -> Dict[str, Any]:
@@ -234,7 +234,7 @@ async def get_pdf_file(
 
 
 @mcp.tool
-async def register_tenant(
+async def pdf_register_tenant(
     tenant_id: str,
     storage_path: Optional[str] = None,
     ctx: Optional[Context] = None,

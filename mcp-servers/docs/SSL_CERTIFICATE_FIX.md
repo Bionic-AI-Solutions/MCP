@@ -84,3 +84,7 @@ If certificate provisioning fails:
 - Ingress: `/home/skadam/git/MCP/mcp-servers/k8s/kong/calculator-routes.yaml`
 
 
+
+
+
+

@@ -27,7 +27,7 @@ async def main():
         # Option 1: Register tenant programmatically (if not configured via env)
         print(f"=== Registering tenant: {tenant_id} ===")
         result = await client.call_tool(
-            "register_tenant",
+            "pdf_register_tenant",
             {
                 "tenant_id": tenant_id,
                 # Add your tenant configuration parameters here
@@ -40,7 +40,7 @@ async def main():
         # Example: Call a tool
         print(f"=== Calling example_tool for tenant: {tenant_id} ===")
         result = await client.call_tool(
-            "example_tool",
+            "pdf_generate_pdf",
             {
                 "tenant_id": tenant_id,
                 # Add your tool parameters here

@@ -60,7 +60,7 @@ class TableInfoRequest(BaseModel):
 # ============================================================================
 
 @mcp.tool
-async def execute_query(
+async def pg_execute_query(
     tenant_id: str,
     query: str,
     params: Optional[List[Any]] = None,
@@ -97,7 +97,7 @@ async def execute_query(
 
 
 @mcp.tool
-async def list_tables(
+async def pg_list_tables(
     tenant_id: str,
     schema: str = "public",
     ctx: Optional[Context] = None,
@@ -127,7 +127,7 @@ async def list_tables(
 
 
 @mcp.tool
-async def describe_table(
+async def pg_describe_table(
     tenant_id: str,
     table_name: str,
     schema: str = "public",
@@ -171,7 +171,7 @@ async def describe_table(
 
 
 @mcp.tool
-async def register_tenant(
+async def pg_register_tenant(
     tenant_id: str,
     host: str,
     database: str,
@@ -215,7 +215,7 @@ async def register_tenant(
 @mcp.resource("postgres://{tenant_id}/tables")
 async def get_tables_resource(tenant_id: str) -> str:
     """Get list of tables for a tenant as a resource."""
-    result = await list_tables(tenant_id)
+    result = await pg_list_tables(tenant_id)
     return json.dumps(result, indent=2)
 
 

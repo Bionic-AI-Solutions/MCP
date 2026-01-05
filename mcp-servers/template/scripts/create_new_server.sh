@@ -39,6 +39,24 @@ if [[ ! "$SERVER_NAME" =~ ^[a-z0-9-]+$ ]]; then
     exit 1
 fi
 
+# Generate abbreviation for tool prefixes
+# Common abbreviations - extend this mapping as needed
+case "$SERVER_NAME" in
+    postgres)
+        SERVER_NAME_ABBR="pg"
+        ;;
+    calculator)
+        SERVER_NAME_ABBR="calc"
+        ;;
+    pdf-generator)
+        SERVER_NAME_ABBR="pdf"
+        ;;
+    *)
+        # Default: use first part before hyphen, or full name if no hyphen
+        SERVER_NAME_ABBR=$(echo "$SERVER_NAME" | cut -d'-' -f1)
+        ;;
+esac
+
 # Validate port
 if ! [[ "$PORT" =~ ^[0-9]+$ ]] || [ "$PORT" -lt 8000 ] || [ "$PORT" -gt 8999 ]; then
     print_error "Port must be a number between 8000 and 8999"
@@ -86,6 +104,9 @@ find "src/mcp_servers/$SERVER_NAME" -type f -exec sed -i "s/Server Name Server/$
 SERVER_NAME_CAMEL=$(echo "$SERVER_NAME" | sed 's/-\([a-z]\)/\U\1/g' | sed 's/^\([a-z]\)/\U\1/')
 find "src/mcp_servers/$SERVER_NAME" -type f -exec sed -i "s/SERVER_NAMETenantManager/${SERVER_NAME_CAMEL}TenantManager/g" {} +
 find "src/mcp_servers/$SERVER_NAME" -type f -exec sed -i "s/SERVER_NAMETenantConfig/${SERVER_NAME_CAMEL}TenantConfig/g" {} +
+
+# Update tool names to use server abbreviation prefix
+find "src/mcp_servers/$SERVER_NAME" -type f -exec sed -i "s/SERVER_NAME_ABBR/${SERVER_NAME_ABBR}_/g" {} +
 
 # Create example file
 print_info "Creating example file..."

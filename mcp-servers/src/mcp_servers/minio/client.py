@@ -20,7 +20,7 @@ async def main():
         tenant_id = "1"
         print(f"\n=== Registering tenant: {tenant_id} ===")
         result = await client.call_tool(
-            "register_tenant",
+            "minio_register_tenant",
             {
                 "tenant_id": tenant_id,
                 "endpoint": "localhost:9000",
@@ -33,14 +33,14 @@ async def main():
         
         # List buckets
         print(f"\n=== Listing buckets for tenant: {tenant_id} ===")
-        result = await client.call_tool("list_buckets", {"tenant_id": tenant_id})
+        result = await client.call_tool("minio_list_buckets", {"tenant_id": tenant_id})
         print(f"Buckets: {result.content[0].text}")
         
         # Create a bucket
         bucket_name = "test-bucket"
         print(f"\n=== Creating bucket: {bucket_name} ===")
         result = await client.call_tool(
-            "create_bucket",
+            "minio_create_bucket",
             {"tenant_id": tenant_id, "bucket_name": bucket_name},
         )
         print(f"Result: {result.content[0].text}")
@@ -48,7 +48,7 @@ async def main():
         # Upload an object
         print(f"\n=== Uploading object ===")
         result = await client.call_tool(
-            "upload_object",
+            "minio_upload_object",
             {
                 "tenant_id": tenant_id,
                 "bucket_name": bucket_name,
@@ -61,7 +61,7 @@ async def main():
         # List objects
         print(f"\n=== Listing objects ===")
         result = await client.call_tool(
-            "list_objects",
+            "minio_list_objects",
             {"tenant_id": tenant_id, "bucket_name": bucket_name},
         )
         print(f"Objects: {result.content[0].text}")
@@ -69,7 +69,7 @@ async def main():
         # Download the object
         print(f"\n=== Downloading object ===")
         result = await client.call_tool(
-            "download_object",
+            "minio_download_object",
             {
                 "tenant_id": tenant_id,
                 "bucket_name": bucket_name,

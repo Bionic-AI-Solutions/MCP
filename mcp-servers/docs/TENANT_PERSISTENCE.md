@@ -84,3 +84,7 @@ curl https://mcp.baisoln.com/postgres/mcp -X POST \
   - `lifespan()` function calls `tenant_manager.initialize()` on startup
 
 
+
+
+
+

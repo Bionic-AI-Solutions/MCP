@@ -20,31 +20,31 @@ async def main():
         print("\n=== Calculator Operations ===")
         
         # Addition
-        result = await client.call_tool("add", {"a": 10, "b": 5})
+        result = await client.call_tool("calc_add", {"a": 10, "b": 5})
         print(f"10 + 5 = {result.content[0].text}")
         
         # Subtraction
-        result = await client.call_tool("subtract", {"a": 10, "b": 3})
+        result = await client.call_tool("calc_subtract", {"a": 10, "b": 3})
         print(f"10 - 3 = {result.content[0].text}")
         
         # Multiplication
-        result = await client.call_tool("multiply", {"a": 6, "b": 7})
+        result = await client.call_tool("calc_multiply", {"a": 6, "b": 7})
         print(f"6 * 7 = {result.content[0].text}")
         
         # Division
-        result = await client.call_tool("divide", {"a": 20, "b": 4})
+        result = await client.call_tool("calc_divide", {"a": 20, "b": 4})
         print(f"20 / 4 = {result.content[0].text}")
         
         # Power
-        result = await client.call_tool("power", {"base": 2, "exponent": 8})
+        result = await client.call_tool("calc_power", {"base": 2, "exponent": 8})
         print(f"2^8 = {result.content[0].text}")
         
         # Square root
-        result = await client.call_tool("sqrt", {"value": 64})
+        result = await client.call_tool("calc_sqrt", {"value": 64})
         print(f"√64 = {result.content[0].text}")
         
         # Modulo
-        result = await client.call_tool("modulo", {"a": 17, "b": 5})
+        result = await client.call_tool("calc_modulo", {"a": 17, "b": 5})
         print(f"17 % 5 = {result.content[0].text}")
 
 

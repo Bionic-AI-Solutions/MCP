@@ -97,7 +97,7 @@ def get_video_info(input_path: str) -> Dict[str, Any]:
 # ============================================================================
 
 @mcp.tool
-async def convert_video(
+async def ffmpeg_convert_video(
     input_data: str = Field(..., description="Base64-encoded input video data"),
     output_format: str = Field("mp4", description="Output format (mp4, avi, mov, webm, etc.)"),
     video_codec: Optional[str] = Field(None, description="Video codec (h264, vp9, etc.). Auto-detected if not specified"),
@@ -176,7 +176,7 @@ async def convert_video(
 
 
 @mcp.tool
-async def extract_audio(
+async def ffmpeg_extract_audio(
     input_data: str = Field(..., description="Base64-encoded input video data"),
     output_format: str = Field("mp3", description="Output audio format (mp3, wav, aac, ogg, etc.)"),
     audio_codec: Optional[str] = Field(None, description="Audio codec. Auto-detected if not specified"),
@@ -231,7 +231,7 @@ async def extract_audio(
 
 
 @mcp.tool
-async def merge_videos(
+async def ffmpeg_merge_videos(
     video_data_list: List[str] = Field(..., description="List of base64-encoded video data"),
     output_format: str = Field("mp4", description="Output format"),
     ctx: Optional[Context] = None,
@@ -297,7 +297,7 @@ async def merge_videos(
 
 
 @mcp.tool
-async def add_subtitles(
+async def ffmpeg_add_subtitles(
     input_data: str = Field(..., description="Base64-encoded input video data"),
     subtitle_text: str = Field(..., description="Subtitle text to add"),
     start_time: str = Field(..., description="Start time (HH:MM:SS or seconds)"),
@@ -370,7 +370,7 @@ async def add_subtitles(
 
 
 @mcp.tool
-async def trim_video(
+async def ffmpeg_trim_video(
     input_data: str = Field(..., description="Base64-encoded input video data"),
     start_time: str = Field(..., description="Start time (HH:MM:SS or seconds)"),
     duration: Optional[str] = Field(None, description="Duration (HH:MM:SS or seconds). If not specified, trims to end"),
@@ -427,7 +427,7 @@ async def trim_video(
 
 
 @mcp.tool
-async def get_video_info_tool(
+async def ffmpeg_get_video_info_tool(
     input_data: str = Field(..., description="Base64-encoded input video data"),
     ctx: Optional[Context] = None,
 ) -> Dict[str, Any]:
@@ -485,7 +485,7 @@ async def get_video_info_tool(
 
 
 @mcp.tool
-async def resize_video(
+async def ffmpeg_resize_video(
     input_data: str = Field(..., description="Base64-encoded input video data"),
     width: int = Field(..., description="Output width in pixels"),
     height: int = Field(..., description="Output height in pixels"),
@@ -545,7 +545,7 @@ async def resize_video(
 
 
 @mcp.tool
-async def extract_frame(
+async def ffmpeg_extract_frame(
     input_data: str = Field(..., description="Base64-encoded input video data"),
     timestamp: str = Field(..., description="Timestamp to extract frame (HH:MM:SS or seconds)"),
     output_format: str = Field("png", description="Output image format (png, jpg, etc.)"),

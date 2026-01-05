@@ -53,7 +53,7 @@ class ExampleRequest(BaseModel):
 # ============================================================================
 
 @mcp.tool
-async def example_tool(
+async def SERVER_NAME_ABBR_example_tool(
     tenant_id: str,
     # Add your parameters here
     ctx: Optional[Context] = None,
@@ -85,7 +85,7 @@ async def example_tool(
 
 
 @mcp.tool
-async def register_tenant(
+async def SERVER_NAME_ABBR_register_tenant(
     tenant_id: str,
     # Add your tenant configuration parameters here
     # Example for API-based service:
