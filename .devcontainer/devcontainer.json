@@ -1,0 +1,93 @@
+{
+  "name": "MCP Servers Development",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+  "mounts": [
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind",
+    "source=/usr/bin/docker,target=/usr/bin/docker,type=bind,readonly",
+    "source=/usr/local/bin/docker,target=/usr/local/bin/docker,type=bind,readonly",
+    "source=${localEnv:HOME}/.kube,target=/home/vscode/.kube,type=bind",
+    "source=/usr/local/bin/kubectl,target=/usr/local/bin/kubectl,type=bind,readonly",
+    "source=${localWorkspaceFolder}/mcp-servers/mcp_client_config_cursor_local.json,target=/home/vscode/.cursor/mcp_client_config_cursor_local.json,type=bind",
+    "source=${localWorkspaceFolder}/mcp-servers/mcp_client_config_cursor_local_command.json,target=/home/vscode/.cursor/mcp_client_config_cursor_local_command.json,type=bind",
+    "source=${localWorkspaceFolder}/mcp-servers/mcp_client_config_cursor_remote.json,target=/home/vscode/.cursor/mcp_client_config_cursor_remote.json,type=bind"
+  ],
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "version": "latest",
+      "dockerDashComposeVersion": "v2"
+    },
+    "ghcr.io/devcontainers/features/git:1": {
+      "version": "latest"
+    }
+  },
+  "remoteUser": "vscode",
+  "remoteEnv": {
+    "PYTHONPATH": "/workspace/mcp-servers/src",
+    "DOCKER_HOST": "unix:///var/run/docker.sock"
+  },
+  "forwardPorts": [8000, 8001, 8002, 8003, 8004, 8005, 6379],
+  "portsAttributes": {
+    "8000": {
+      "label": "Calculator MCP Server",
+      "onAutoForward": "notify"
+    },
+    "8001": {
+      "label": "Postgres MCP Server",
+      "onAutoForward": "notify"
+    },
+    "8002": {
+      "label": "MinIO MCP Server",
+      "onAutoForward": "notify"
+    },
+    "8003": {
+      "label": "PDF Generator MCP Server",
+      "onAutoForward": "notify"
+    },
+    "8004": {
+      "label": "FFmpeg MCP Server",
+      "onAutoForward": "notify"
+    },
+    "8005": {
+      "label": "Mail MCP Server",
+      "onAutoForward": "notify"
+    },
+    "6379": {
+      "label": "Redis",
+      "onAutoForward": "silent"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-python.black-formatter",
+        "charliermarsh.ruff",
+        "ms-azuretools.vscode-docker",
+        "ms-kubernetes-tools.vscode-kubernetes-tools"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.linting.enabled": true,
+        "python.linting.ruffEnabled": true,
+        "python.formatting.provider": "black",
+        "python.formatting.blackArgs": ["--line-length=100"],
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+          "source.organizeImports": "explicit"
+        },
+        "files.exclude": {
+          "**/__pycache__": true,
+          "**/*.pyc": true
+        }
+      }
+    }
+  },
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "overrideCommand": false
+}
