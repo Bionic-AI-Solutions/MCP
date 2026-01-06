@@ -6,6 +6,7 @@ Adapted from openproject-mcp-server for FastMCP integration.
 """
 
 import os
+import io
 import json
 import logging
 import base64
@@ -860,15 +861,43 @@ class OpenProjectClient:
         Add an attachment to a work package.
         
         Note: This uses multipart form data upload.
+        OpenProject API requires:
+        1. The file to be sent as multipart/form-data
+        2. A metadata JSON part containing 'fileName' (required) and optionally 'description'
+        
+        The filename must be provided in BOTH:
+        - The Content-Disposition header of the file part
+        - The 'fileName' field in the metadata JSON part
         """
         url = f"{self.base_url}/api/v3/work_packages/{work_package_id}/attachments"
         
-        # Build form data
+        # Build form data with proper file field
+        # Use BytesIO to ensure proper file-like object handling
+        file_obj = io.BytesIO(file_data)
+        
         form_data = aiohttp.FormData()
-        form_data.add_field('file', file_data, filename=filename, content_type=content_type)
+        # Add file field with explicit filename and content_type
+        # The filename parameter ensures it's set in Content-Disposition header
+        form_data.add_field(
+            'file',
+            file_obj,
+            filename=filename,
+            content_type=content_type
+        )
+        
+        # Build metadata JSON - OpenProject REQUIRES 'fileName' in metadata
+        # This is in addition to the filename in the Content-Disposition header
+        metadata = {
+            "fileName": filename
+        }
         if description:
-            form_data.add_field('metadata', json.dumps({"description": {"raw": description}}), 
-                              content_type='application/json')
+            metadata["description"] = {"raw": description}
+        
+        form_data.add_field(
+            'metadata',
+            json.dumps(metadata),
+            content_type='application/json'
+        )
         
         # Custom headers for multipart (without Content-Type as aiohttp will set it)
         headers = {
