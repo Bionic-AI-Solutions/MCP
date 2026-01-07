@@ -106,3 +106,13 @@ kubectl exec -n mcp redis-<pod-name> -- redis-cli -n 1 KEYS "mcp:minio:*"
 
 
 
+
+
+
+
+
+
+
+
+
+

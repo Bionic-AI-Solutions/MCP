@@ -19,6 +19,10 @@
     "mail-mcp-remote": {
       "url": "https://mcp.bionicaisolutions.com/mail/mcp",
       "description": "Mail Service MCP Server - External access via HTTPS"
+    },
+    "meilisearch-mcp-remote": {
+      "url": "https://mcp.baisoln.com/meilisearch/mcp",
+      "description": "MeiliSearch MCP Server - External access via HTTPS"
     }
   }
 }

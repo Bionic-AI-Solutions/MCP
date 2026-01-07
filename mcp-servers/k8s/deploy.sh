@@ -59,6 +59,7 @@ kubectl wait --for=condition=available --timeout=300s deployment/mcp-postgres-se
 kubectl wait --for=condition=available --timeout=300s deployment/mcp-minio-server -n $NAMESPACE || true
 kubectl wait --for=condition=available --timeout=300s deployment/mcp-pdf-generator-server -n $NAMESPACE || true
 kubectl wait --for=condition=available --timeout=300s deployment/mcp-openproject-server -n $NAMESPACE || true
+kubectl wait --for=condition=available --timeout=300s deployment/mcp-meilisearch-server -n $NAMESPACE || true
 
 # Show status
 echo ""
@@ -79,4 +80,5 @@ echo "  Postgres:     https://mcp.baisoln.com/postgres/health"
 echo "  MinIO:        https://mcp.baisoln.com/minio/health"
 echo "  PDF Gen:      https://mcp.baisoln.com/pdf-generator/health"
 echo "  OpenProject:  https://mcp.baisoln.com/openproject/health"
+echo "  MeiliSearch:  https://mcp.baisoln.com/meilisearch/health"
 

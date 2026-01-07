@@ -1,0 +1,132 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mcp-meilisearch-config
+  namespace: mcp
+  labels:
+    app: mcp-meilisearch-server
+    app.kubernetes.io/name: mcp-meilisearch
+data:
+  SERVER_NAME: "MeiliSearch Server"
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  REDIS_DB: "5"
+  PYTHONPATH: "/app/src"
+  # Default MeiliSearch URL using internal Kubernetes DNS
+  MEILISEARCH_TENANT_1_URL: "http://meilisearch.meilisearch:7700"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-meilisearch-server
+  namespace: mcp
+  labels:
+    app: mcp-meilisearch-server
+    app.kubernetes.io/name: mcp-meilisearch
+    app.kubernetes.io/component: server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-meilisearch-server
+  template:
+    metadata:
+      labels:
+        app: mcp-meilisearch-server
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: ubuntu
+      imagePullSecrets:
+        - name: dockerhub-pull-secret
+      containers:
+        - name: meilisearch
+          image: docker.io/docker4zerocool/mcp-servers-meilisearch:latest
+          imagePullPolicy: Always
+          command:
+            - fastmcp
+            - run
+            - src/mcp_servers/meilisearch/server.py
+            - --transport
+            - http
+            - --port
+            - "8007"
+            - --host
+            - "0.0.0.0"
+          ports:
+            - containerPort: 8007
+              name: http
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: mcp-meilisearch-config
+          env:
+            # Tenant configuration - these should be set via Secrets in production
+            - name: MEILISEARCH_TENANT_1_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: mcp-meilisearch-config
+                  key: MEILISEARCH_TENANT_1_URL
+            - name: MEILISEARCH_TENANT_1_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-meilisearch-secrets
+                  key: tenant-1-api-key
+                  optional: true
+            - name: MEILISEARCH_TENANT_1_TIMEOUT
+              value: "5"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "200m"
+            limits:
+              memory: "512Mi"
+              cpu: "1000m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8007
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8007
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-meilisearch-server
+  namespace: mcp
+  labels:
+    app: mcp-meilisearch-server
+    app.kubernetes.io/name: mcp-meilisearch
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8007
+      targetPort: 8007
+      protocol: TCP
+      name: http
+  selector:
+    app: mcp-meilisearch-server
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mcp-meilisearch-secrets
+  namespace: mcp
+  labels:
+    app: mcp-meilisearch-server
+type: Opaque
+stringData:
+  tenant-1-api-key: ""  # Optional - leave empty if no API key required
+

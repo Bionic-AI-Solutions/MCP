@@ -8,6 +8,7 @@ Uses environment variables for configuration (OPENPROJECT_URL, OPENPROJECT_API_K
 import os
 import json
 import logging
+import base64
 from typing import Optional, Dict, Any, AsyncIterator, Union, Annotated
 from contextlib import asynccontextmanager
 
@@ -1669,6 +1670,67 @@ async def list_work_package_attachments(
             }
             for a in attachments
         ],
+    }
+
+
+@mcp.tool
+async def add_work_package_attachment(
+    work_package_id: IntOrStr,
+    file_data: str,  # Base64-encoded file content
+    filename: str,
+    content_type: str = "application/octet-stream",
+    description: Optional[str] = None,
+    ctx: Optional[Context] = None,
+) -> Dict[str, Any]:
+    """
+    Add an attachment to a work package.
+    
+    Args:
+        work_package_id: ID of the work package
+        file_data: Base64-encoded file content
+        filename: Name of the file to attach
+        content_type: MIME type of the file (default: application/octet-stream)
+        description: Optional description of the attachment
+    
+    Use cases:
+    - Attach documents to work packages
+    - Upload screenshots or images
+    - Add supporting files
+    """
+    if not client:
+        raise Exception("OpenProject Client not initialized.")
+    
+    if ctx:
+        await ctx.info(f"Adding attachment '{filename}' to work package {work_package_id}...")
+    
+    # Decode base64 file data
+    try:
+        file_bytes = base64.b64decode(file_data)
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Invalid base64 file data: {str(e)}",
+        }
+    
+    result = await client.add_work_package_attachment(
+        work_package_id,
+        file_bytes,
+        filename,
+        content_type,
+        description,
+    )
+    
+    return {
+        "success": True,
+        "message": f"Attachment '{filename}' added to work package {work_package_id}",
+        "attachment": {
+            "id": result.get("id"),
+            "filename": result.get("fileName", filename),
+            "file_size": result.get("fileSize"),
+            "content_type": result.get("contentType", content_type),
+            "description": result.get("description", {}).get("raw", "") if result.get("description") else description or "",
+            "created_at": result.get("createdAt"),
+        },
     }
 
 

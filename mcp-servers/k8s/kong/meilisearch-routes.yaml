@@ -1,16 +1,16 @@
-# Kong IngressRoute for OpenProject MCP Server
+# Kong IngressRoute for MeiliSearch MCP Server
 # Supports both HTTP (/mcp) and SSE (/sse) protocols
 
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: mcp-openproject-ingress
+  name: mcp-meilisearch-ingress
   namespace: mcp
   annotations:
     konghq.com/strip-path: "false"
     konghq.com/preserve-host: "true"
     konghq.com/protocols: "https"
-    konghq.com/plugins: "mcp-openproject-cors,mcp-openproject-rate-limit,mcp-openproject-path-rewrite"
+    konghq.com/plugins: "mcp-meilisearch-cors,mcp-meilisearch-rate-limit,mcp-meilisearch-path-rewrite"
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
 spec:
   ingressClassName: kong
@@ -23,63 +23,55 @@ spec:
       http:
         paths:
           # Main MCP endpoint - HTTP protocol
-          - path: /openproject/mcp
+          - path: /meilisearch/mcp
             pathType: Exact
             backend:
               service:
-                name: mcp-openproject-server
+                name: mcp-meilisearch-server
                 port:
-                  number: 8006
+                  number: 8007
           # SSE endpoint - Server-Sent Events protocol
-          - path: /openproject/sse
+          - path: /meilisearch/sse
             pathType: Exact
             backend:
               service:
-                name: mcp-openproject-server
+                name: mcp-meilisearch-server
                 port:
-                  number: 8006
-          # Discovery endpoint - handles POST to /openproject/ (for Cursor discovery)
-          - path: /openproject/
+                  number: 8007
+          # Discovery endpoint - handles POST to /meilisearch/ (for Cursor discovery)
+          - path: /meilisearch/
             pathType: Exact
             backend:
               service:
-                name: mcp-openproject-server
+                name: mcp-meilisearch-server
                 port:
-                  number: 8006
-          # Messages endpoint - handles /openproject/messages requests
-          - path: /openproject/messages
+                  number: 8007
+          # Messages endpoint - handles /meilisearch/messages requests
+          - path: /meilisearch/messages
             pathType: Prefix
             backend:
               service:
-                name: mcp-openproject-server
+                name: mcp-meilisearch-server
                 port:
-                  number: 8006
-          # Message endpoint - handles /openproject/message requests (singular)
-          - path: /openproject/message
-            pathType: Prefix
-            backend:
-              service:
-                name: mcp-openproject-server
-                port:
-                  number: 8006
+                  number: 8007
           # Health check endpoint (no auth required)
-          - path: /openproject/health
+          - path: /meilisearch/health
             pathType: Exact
             backend:
               service:
-                name: mcp-openproject-server
+                name: mcp-meilisearch-server
                 port:
-                  number: 8006
+                  number: 8007
 
 ---
-# CORS Plugin for OpenProject
+# CORS Plugin for MeiliSearch
 apiVersion: configuration.konghq.com/v1
 kind: KongPlugin
 metadata:
-  name: mcp-openproject-cors
+  name: mcp-meilisearch-cors
   namespace: mcp
   labels:
-    app: mcp-openproject-server
+    app: mcp-meilisearch-server
 config:
   origins:
     - "*"
@@ -101,14 +93,14 @@ config:
 plugin: cors
 
 ---
-# Rate Limiting Plugin for OpenProject
+# Rate Limiting Plugin for MeiliSearch
 apiVersion: configuration.konghq.com/v1
 kind: KongPlugin
 metadata:
-  name: mcp-openproject-rate-limit
+  name: mcp-meilisearch-rate-limit
   namespace: mcp
   labels:
-    app: mcp-openproject-server
+    app: mcp-meilisearch-server
 config:
   minute: 1000
   hour: 10000
@@ -118,15 +110,15 @@ config:
 plugin: rate-limiting
 
 ---
-# Path Rewrite Plugin for OpenProject - Rewrites /openproject/mcp to /mcp
+# Path Rewrite Plugin for MeiliSearch - Rewrites /meilisearch/mcp to /mcp
 # Also ensures Accept header is set for FastMCP compatibility
 apiVersion: configuration.konghq.com/v1
 kind: KongPlugin
 metadata:
-  name: mcp-openproject-path-rewrite
+  name: mcp-meilisearch-path-rewrite
   namespace: mcp
   labels:
-    app: mcp-openproject-server
+    app: mcp-meilisearch-server
 config:
   replace:
     uri: "/mcp"
@@ -134,15 +126,4 @@ config:
     headers:
       - "Accept:application/json, text/event-stream"
 plugin: request-transformer
-
-
-
-
-
-
-
-
-
-
-
 

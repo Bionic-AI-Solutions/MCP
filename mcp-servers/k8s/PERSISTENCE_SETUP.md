@@ -238,3 +238,13 @@ kubectl exec -n mcp <redis-pod> -- ls -la /data
 
 
 
+
+
+
+
+
+
+
+
+
+

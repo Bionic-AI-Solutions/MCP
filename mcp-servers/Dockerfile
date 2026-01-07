@@ -25,7 +25,7 @@ RUN pip install --no-cache-dir uv
 COPY pyproject.toml ./
 
 # Install dependencies (including fastmcp)
-RUN uv pip install --system fastmcp psycopg[binary,pool] minio pydantic python-dotenv redis weasyprint reportlab httpx email-validator aiohttp
+RUN uv pip install --system fastmcp psycopg[binary,pool] minio pydantic python-dotenv redis weasyprint reportlab httpx email-validator aiohttp meilisearch
 
 # Calculator stage
 FROM base as calculator
@@ -111,4 +111,14 @@ EXPOSE 8006
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8006/health || exit 1
 CMD ["fastmcp", "run", "src/mcp_servers/openproject/server.py", "--transport", "http", "--port", "8006", "--host", "0.0.0.0"]
+
+# MeiliSearch stage
+FROM base as meilisearch
+COPY src/ ./src/
+WORKDIR /app
+ENV PYTHONPATH=/app/src
+EXPOSE 8007
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8007/health || exit 1
+CMD ["fastmcp", "run", "src/mcp_servers/meilisearch/server.py", "--transport", "http", "--port", "8007", "--host", "0.0.0.0"]
 

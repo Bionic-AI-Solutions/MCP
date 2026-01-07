@@ -1,136 +1,109 @@
 # MCP Servers DevContainer
 
-This devcontainer provides a complete development environment for MCP (Model Context Protocol) servers development.
+A clean, simple DevContainer setup for developing and deploying MCP servers.
 
 ## Features
 
-- ✅ Python 3.12 with all MCP server dependencies
-- ✅ Docker CLI access (uses host Docker daemon)
-- ✅ kubectl access (uses host kubectl and kubeconfig)
 - ✅ All MCP server dependencies pre-installed
-- ✅ VS Code extensions for Python development
-- ✅ Port forwarding for all MCP servers (8000-8005, 6379)
+- ✅ Docker CLI (uses host docker daemon)
+- ✅ kubectl for Kubernetes deployment
+- ✅ Python 3.12 with all required packages
+- ✅ Development tools (vim, nano, git)
+- ✅ VS Code extensions pre-configured
 
-## Prerequisites
+## What's Included
 
-- Docker Desktop or Docker Engine running on the host
-- VS Code with the "Dev Containers" extension
-- kubectl installed on the host (optional, for Kubernetes access)
-- Kubernetes config at `~/.kube/config` (optional)
+### System Dependencies
+- Python 3.12
+- Docker CLI
+- kubectl
+- PostgreSQL client
+- FFmpeg
+- All required libraries for PDF generation, image processing, etc.
 
-## First Time Setup
+### Python Dependencies
+- fastmcp
+- psycopg (PostgreSQL)
+- minio
+- redis
+- weasyprint, reportlab (PDF generation)
+- httpx, aiohttp (HTTP clients)
+- pytest, ruff, black (development tools)
 
-1. Open the project in VS Code
-2. When prompted, click "Reopen in Container" or use Command Palette: `Dev Containers: Reopen in Container`
-3. The first build may take 10-15 minutes due to ffmpeg dependencies
-4. Subsequent builds will be much faster due to Docker layer caching
+### Mounts
+- Docker socket (`/var/run/docker.sock`) - for building/pushing images
+- Kubernetes config (`~/.kube`) - for cluster access
+- MCP config files (`~/.cursor/mcp*.json`) - for Cursor integration
+- Workspace - full access to code
 
-## What Gets Mounted
+## Usage
 
-- **Docker Socket**: `/var/run/docker.sock` - Access to host Docker daemon
-- **Docker CLI**: `/usr/bin/docker` and `/usr/local/bin/docker` - Docker commands
-- **Kubernetes Config**: `~/.kube` directory - Kubernetes cluster access
-- **kubectl**: `/usr/local/bin/kubectl` - Kubernetes CLI
-- **MCP Config Files**: MCP client configuration files are mounted to `~/.cursor/`
+### Running MCP Servers
+
+Start all servers:
+```bash
+cd mcp-servers
+docker compose up -d
+```
+
+Start individual server:
+```bash
+cd mcp-servers
+fastmcp run src/mcp_servers/calculator/server.py --transport http --port 8000 --host 0.0.0.0
+```
+
+### Building Docker Images
+
+```bash
+cd mcp-servers
+docker build --target calculator -t my-calculator:latest .
+docker push my-calculator:latest
+```
+
+### Kubernetes Deployment
+
+```bash
+cd mcp-servers/k8s
+kubectl apply -f .
+kubectl get pods -n mcp
+```
+
+### Running Tests
+
+```bash
+cd mcp-servers
+pytest tests/
+```
 
 ## Port Forwarding
 
 The following ports are automatically forwarded:
-
-- `8000` - Calculator MCP Server
-- `8001` - Postgres MCP Server
-- `8002` - MinIO MCP Server
-- `8003` - PDF Generator MCP Server
-- `8004` - FFmpeg MCP Server
-- `8005` - Mail MCP Server
-- `6379` - Redis
-
-## Usage
-
-### Start MCP Servers
-
-```bash
-cd /workspace/mcp-servers
-docker compose up -d
-```
-
-### Run Tests
-
-```bash
-cd /workspace/mcp-servers
-pytest
-```
-
-### Access Kubernetes
-
-```bash
-kubectl get pods
-kubectl get services
-```
-
-### Build Docker Images
-
-```bash
-cd /workspace/mcp-servers
-docker compose build
-```
+- 8000: Calculator MCP Server
+- 8001: Postgres MCP Server
+- 8002: MinIO MCP Server
+- 8003: PDF Generator MCP Server
+- 8004: FFmpeg MCP Server
+- 8005: Mail MCP Server
+- 8006: OpenProject MCP Server
+- 6379: Redis
 
 ## Environment Variables
 
-The following environment variables are set:
-
 - `PYTHONPATH=/workspace/mcp-servers/src`
 - `DOCKER_HOST=unix:///var/run/docker.sock`
+- `KUBECONFIG=/home/vscode/.kube/config`
 
 ## Troubleshooting
 
 ### Docker not accessible
-
-If Docker commands fail, verify:
-1. Docker is running on the host
-2. The docker socket is mounted correctly
-3. You have permissions to access the docker socket
+- Check that `/var/run/docker.sock` is mounted
+- Verify Docker is running on the host
 
 ### Kubernetes not accessible
+- Check that `~/.kube/config` exists on the host
+- Verify kubectl can connect from the host
 
-If kubectl commands fail, verify:
-1. `~/.kube/config` exists on the host
-2. The kubeconfig is valid
-3. You can access the cluster from the host
-
-### Build takes too long
-
-The first build includes ffmpeg which has many dependencies. This is normal and subsequent builds will be faster due to caching.
-
-### Python imports fail
-
-Ensure you're in the correct directory and `PYTHONPATH` is set:
-```bash
-export PYTHONPATH=/workspace/mcp-servers/src
-cd /workspace/mcp-servers
-```
-
-## VS Code Extensions
-
-The following extensions are automatically installed:
-
-- Python (ms-python.python)
-- Pylance (ms-python.vscode-pylance)
-- Black Formatter (ms-python.black-formatter)
-- Ruff (charliermarsh.ruff)
-- Docker (ms-azuretools.vscode-docker)
-- Kubernetes (ms-kubernetes-tools.vscode-kubernetes-tools)
-
-## Customization
-
-To customize the devcontainer:
-
-1. Edit `.devcontainer/devcontainer.json` for VS Code settings
-2. Edit `.devcontainer/Dockerfile` for container image changes
-3. Edit `.devcontainer/post-create.sh` for post-creation setup
-
-After making changes, rebuild the container:
-- Command Palette: `Dev Containers: Rebuild Container`
-
-
-
+### MCP servers won't start
+- Check that dependencies are installed: `python3 -c "import fastmcp"`
+- Verify PYTHONPATH is set correctly
+- Check port availability

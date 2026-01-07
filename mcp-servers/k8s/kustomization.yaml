@@ -19,6 +19,7 @@ resources:
   - ffmpeg/deployment.yaml
   - mail/deployment.yaml
   - openproject/deployment.yaml
+  - meilisearch/deployment.yaml
   
   # Kong Ingress Routes
   - kong/calculator-routes.yaml
@@ -28,6 +29,7 @@ resources:
   - kong/ffmpeg-routes.yaml
   - kong/mail-routes.yaml
   - kong/openproject-routes.yaml
+  - kong/meilisearch-routes.yaml
 
 # Image transformers - using Docker Hub images
 images:
@@ -51,6 +53,9 @@ images:
     newTag: latest
   - name: mcp-servers-openproject
     newName: docker.io/docker4zerocool/mcp-servers-openproject
+    newTag: latest
+  - name: mcp-servers-meilisearch
+    newName: docker.io/docker4zerocool/mcp-servers-meilisearch
     newTag: latest
 
 commonLabels:
