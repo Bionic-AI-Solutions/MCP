@@ -1,0 +1,136 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mcp-nano-banana-config
+  namespace: mcp
+  labels:
+    app: mcp-nano-banana-server
+    app.kubernetes.io/name: mcp-nano-banana
+data:
+  SERVER_NAME: "Nano Banana Server"
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  REDIS_DB: "6"
+  PYTHONPATH: "/app/src"
+  # Default model configuration
+  NANO_BANANA_TENANT_1_MODEL: "gemini-2.0-flash-exp"
+  NANO_BANANA_TENANT_1_MAX_CONCURRENT: "10"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-nano-banana-server
+  namespace: mcp
+  labels:
+    app: mcp-nano-banana-server
+    app.kubernetes.io/name: mcp-nano-banana
+    app.kubernetes.io/component: server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-nano-banana-server
+  template:
+    metadata:
+      labels:
+        app: mcp-nano-banana-server
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: ubuntu
+      imagePullSecrets:
+        - name: dockerhub-pull-secret
+      containers:
+        - name: nano-banana
+          image: docker.io/docker4zerocool/mcp-servers-nano-banana:latest
+          imagePullPolicy: Always
+          command:
+            - fastmcp
+            - run
+            - src/mcp_servers/nano-banana/server.py
+            - --transport
+            - http
+            - --port
+            - "8008"
+            - --host
+            - "0.0.0.0"
+          ports:
+            - containerPort: 8008
+              name: http
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: mcp-nano-banana-config
+          env:
+            # Tenant configuration - these should be set via Secrets in production
+            - name: NANO_BANANA_TENANT_1_GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-nano-banana-secrets
+                  key: tenant-1-gemini-api-key
+                  optional: true
+            - name: NANO_BANANA_TENANT_1_MODEL
+              valueFrom:
+                configMapKeyRef:
+                  name: mcp-nano-banana-config
+                  key: NANO_BANANA_TENANT_1_MODEL
+            - name: NANO_BANANA_TENANT_1_MAX_CONCURRENT
+              valueFrom:
+                configMapKeyRef:
+                  name: mcp-nano-banana-config
+                  key: NANO_BANANA_TENANT_1_MAX_CONCURRENT
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "300m"
+            limits:
+              memory: "1Gi"
+              cpu: "2000m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8008
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8008
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-nano-banana-server
+  namespace: mcp
+  labels:
+    app: mcp-nano-banana-server
+    app.kubernetes.io/name: mcp-nano-banana
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8008
+      targetPort: 8008
+      protocol: TCP
+      name: http
+  selector:
+    app: mcp-nano-banana-server
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mcp-nano-banana-secrets
+  namespace: mcp
+  labels:
+    app: mcp-nano-banana-server
+type: Opaque
+stringData:
+  tenant-1-gemini-api-key: ""  # Set via: kubectl create secret generic mcp-nano-banana-secrets --from-literal=tenant-1-gemini-api-key=<key> -n mcp
+

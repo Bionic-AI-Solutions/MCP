@@ -1,0 +1,29 @@
+  # Nano Banana MCP Server
+  mcp-nano-banana-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: nano-banana
+    container_name: mcp-nano-banana-server
+    ports:
+      - "8008:8008"
+    environment:
+      - SERVER_NAME=Nano Banana MCP Server
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=6
+      # Add your tenant environment variables here
+      # Example:
+      # - NANO-BANANA_TENANT_1_API_KEY=${NANO-BANANA_TENANT_1_API_KEY:-default_key}
+    restart: unless-stopped
+    networks:
+      - mcp-network
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8008/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

@@ -50,6 +50,10 @@ echo ""
 echo "Building meilisearch image..."
 docker build --target meilisearch -t "$IMAGE_REGISTRY/$IMAGE_NAME-meilisearch:$IMAGE_TAG" .
 
+echo ""
+echo "Building nano-banana image..."
+docker build --target nano-banana -t "$IMAGE_REGISTRY/$IMAGE_NAME-nano-banana:$IMAGE_TAG" .
+
 # Optionally push images
 if [ "${PUSH_IMAGES:-false}" = "true" ]; then
     echo ""
@@ -62,6 +66,7 @@ if [ "${PUSH_IMAGES:-false}" = "true" ]; then
     docker push "$IMAGE_REGISTRY/$IMAGE_NAME-mail:$IMAGE_TAG"
     docker push "$IMAGE_REGISTRY/$IMAGE_NAME-openproject:$IMAGE_TAG"
     docker push "$IMAGE_REGISTRY/$IMAGE_NAME-meilisearch:$IMAGE_TAG"
+    docker push "$IMAGE_REGISTRY/$IMAGE_NAME-nano-banana:$IMAGE_TAG"
 fi
 
 echo ""
@@ -76,6 +81,7 @@ echo "  - $IMAGE_REGISTRY/$IMAGE_NAME-ffmpeg:$IMAGE_TAG"
 echo "  - $IMAGE_REGISTRY/$IMAGE_NAME-mail:$IMAGE_TAG"
 echo "  - $IMAGE_REGISTRY/$IMAGE_NAME-openproject:$IMAGE_TAG"
 echo "  - $IMAGE_REGISTRY/$IMAGE_NAME-meilisearch:$IMAGE_TAG"
+echo "  - $IMAGE_REGISTRY/$IMAGE_NAME-nano-banana:$IMAGE_TAG"
 
 
 

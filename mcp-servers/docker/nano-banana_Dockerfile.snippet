@@ -1,0 +1,9 @@
+# Nano-banana stage
+FROM base as nano-banana
+COPY src/ ./src/
+WORKDIR /app
+ENV PYTHONPATH=/app/src
+EXPOSE 8008
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8008/health || exit 1
+CMD ["fastmcp", "run", "src/mcp_servers/nano-banana/server.py", "--transport", "http", "--port", "8008", "--host", "0.0.0.0"]

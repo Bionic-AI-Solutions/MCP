@@ -23,6 +23,10 @@
     "meilisearch-mcp-remote": {
       "url": "https://mcp.baisoln.com/meilisearch/mcp",
       "description": "MeiliSearch MCP Server - External access via HTTPS"
+    },
+    "nano-banana-mcp-remote": {
+      "url": "https://mcp.baisoln.com/nano-banana/mcp",
+      "description": "Nano Banana MCP Server - AI image generation with Gemini API - External access via HTTPS"
     }
   }
 }

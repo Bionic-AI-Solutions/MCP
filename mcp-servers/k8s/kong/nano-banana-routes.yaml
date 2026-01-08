@@ -1,16 +1,16 @@
-# Kong IngressRoute for MeiliSearch MCP Server
+# Kong IngressRoute for Nano Banana MCP Server
 # Supports both HTTP (/mcp) and SSE (/sse) protocols
 
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: mcp-meilisearch-ingress
+  name: mcp-nano-banana-ingress
   namespace: mcp
   annotations:
     konghq.com/strip-path: "false"
     konghq.com/preserve-host: "true"
     konghq.com/protocols: "https"
-    konghq.com/plugins: "mcp-meilisearch-cors,mcp-meilisearch-rate-limit,mcp-meilisearch-path-rewrite"
+    konghq.com/plugins: "mcp-nano-banana-cors,mcp-nano-banana-rate-limit,mcp-nano-banana-path-rewrite"
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
 spec:
   ingressClassName: kong
@@ -23,55 +23,55 @@ spec:
       http:
         paths:
           # Main MCP endpoint - HTTP protocol
-          - path: /meilisearch/mcp
+          - path: /nano-banana/mcp
             pathType: Exact
             backend:
               service:
-                name: mcp-meilisearch-server
+                name: mcp-nano-banana-server
                 port:
-                  number: 8007
+                  number: 8008
           # SSE endpoint - Server-Sent Events protocol
-          - path: /meilisearch/sse
+          - path: /nano-banana/sse
             pathType: Exact
             backend:
               service:
-                name: mcp-meilisearch-server
+                name: mcp-nano-banana-server
                 port:
-                  number: 8007
-          # Discovery endpoint - handles POST to /meilisearch/ (for Cursor discovery)
-          - path: /meilisearch/
+                  number: 8008
+          # Discovery endpoint - handles POST to /nano-banana/ (for Cursor discovery)
+          - path: /nano-banana/
             pathType: Exact
             backend:
               service:
-                name: mcp-meilisearch-server
+                name: mcp-nano-banana-server
                 port:
-                  number: 8007
-          # Messages endpoint - handles /meilisearch/messages requests
-          - path: /meilisearch/messages
+                  number: 8008
+          # Messages endpoint - handles /nano-banana/messages requests
+          - path: /nano-banana/messages
             pathType: Prefix
             backend:
               service:
-                name: mcp-meilisearch-server
+                name: mcp-nano-banana-server
                 port:
-                  number: 8007
+                  number: 8008
           # Health check endpoint (no auth required)
-          - path: /meilisearch/health
+          - path: /nano-banana/health
             pathType: Exact
             backend:
               service:
-                name: mcp-meilisearch-server
+                name: mcp-nano-banana-server
                 port:
-                  number: 8007
+                  number: 8008
 
 ---
-# CORS Plugin for MeiliSearch
+# CORS Plugin for Nano Banana
 apiVersion: configuration.konghq.com/v1
 kind: KongPlugin
 metadata:
-  name: mcp-meilisearch-cors
+  name: mcp-nano-banana-cors
   namespace: mcp
   labels:
-    app: mcp-meilisearch-server
+    app: mcp-nano-banana-server
 config:
   origins:
     - "*"
@@ -93,14 +93,14 @@ config:
 plugin: cors
 
 ---
-# Rate Limiting Plugin for MeiliSearch
+# Rate Limiting Plugin for Nano Banana
 apiVersion: configuration.konghq.com/v1
 kind: KongPlugin
 metadata:
-  name: mcp-meilisearch-rate-limit
+  name: mcp-nano-banana-rate-limit
   namespace: mcp
   labels:
-    app: mcp-meilisearch-server
+    app: mcp-nano-banana-server
 config:
   minute: 1000
   hour: 10000
@@ -110,15 +110,15 @@ config:
 plugin: rate-limiting
 
 ---
-# Path Rewrite Plugin for MeiliSearch - Rewrites /meilisearch/mcp to /mcp
+# Path Rewrite Plugin for Nano Banana - Rewrites /nano-banana/mcp to /mcp
 # Also ensures Accept header is set for FastMCP compatibility
 apiVersion: configuration.konghq.com/v1
 kind: KongPlugin
 metadata:
-  name: mcp-meilisearch-path-rewrite
+  name: mcp-nano-banana-path-rewrite
   namespace: mcp
   labels:
-    app: mcp-meilisearch-server
+    app: mcp-nano-banana-server
 config:
   replace:
     uri: "/mcp"
@@ -126,5 +126,4 @@ config:
     headers:
       - "Accept:application/json, text/event-stream"
 plugin: request-transformer
-
 
