@@ -267,3 +267,4 @@ Access tenant information as resources:
 - Bulk emails are sent concurrently for better performance
 - The server requires a mail service API endpoint
 
+

@@ -229,3 +229,4 @@ Access tenant information as resources:
 - The server supports both SELECT and non-SELECT queries
 - For non-SELECT queries, the response includes `row_count` indicating affected rows
 
+

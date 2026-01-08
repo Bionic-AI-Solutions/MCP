@@ -134,3 +134,4 @@ type: Opaque
 stringData:
   tenant-1-gemini-api-key: ""  # Set via: kubectl create secret generic mcp-nano-banana-secrets --from-literal=tenant-1-gemini-api-key=<key> -n mcp
 
+

@@ -204,3 +204,4 @@ result = calc_sqrt(value=64)  # Returns 8.0
 - Modulo by zero raises a `ValueError`
 - The server is stateless and requires no configuration
 
+

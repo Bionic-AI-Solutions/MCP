@@ -377,3 +377,4 @@ Access tenant information as resources:
 - Task-based operations (add/delete) return task objects that can be monitored
 - The server supports both master keys and search keys for authentication
 
+
