@@ -1,0 +1,128 @@
+# Kong IngressRoute for AI MCP Server
+# Supports both HTTP (/mcp) and SSE (/sse) protocols
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mcp-ai-mcp-server-ingress
+  namespace: mcp
+  annotations:
+    konghq.com/strip-path: "false"
+    konghq.com/preserve-host: "true"
+    konghq.com/protocols: "https"
+    konghq.com/plugins: "mcp-ai-mcp-server-cors,mcp-ai-mcp-server-rate-limit,mcp-ai-mcp-server-path-rewrite"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: kong
+  tls:
+    - hosts:
+        - mcp.baisoln.com
+      secretName: mcp-baisoln-com-tls
+  rules:
+    - host: mcp.baisoln.com
+      http:
+        paths:
+          # Main MCP endpoint - HTTP protocol
+          - path: /ai-mcp-server/mcp
+            pathType: Exact
+            backend:
+              service:
+                name: mcp-ai-mcp-server
+                port:
+                  number: 8009
+          # SSE endpoint - Server-Sent Events protocol
+          - path: /ai-mcp-server/sse
+            pathType: Exact
+            backend:
+              service:
+                name: mcp-ai-mcp-server
+                port:
+                  number: 8009
+          # Discovery endpoint - handles POST to /ai-mcp-server/ (for Cursor discovery)
+          - path: /ai-mcp-server/
+            pathType: Exact
+            backend:
+              service:
+                name: mcp-ai-mcp-server
+                port:
+                  number: 8009
+          # Messages endpoint - handles /ai-mcp-server/messages requests
+          - path: /ai-mcp-server/messages
+            pathType: Prefix
+            backend:
+              service:
+                name: mcp-ai-mcp-server
+                port:
+                  number: 8009
+          # Message endpoint - handles /ai-mcp-server/message requests (singular)
+          - path: /ai-mcp-server/message
+            pathType: Prefix
+            backend:
+              service:
+                name: mcp-ai-mcp-server
+                port:
+                  number: 8009
+          # Health check endpoint (no auth required)
+          - path: /ai-mcp-server/health
+            pathType: Exact
+            backend:
+              service:
+                name: mcp-ai-mcp-server
+                port:
+                  number: 8009
+
+---
+# CORS Plugin for AI MCP Server
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: mcp-ai-mcp-server-cors
+  namespace: mcp
+config:
+  origins:
+    - "*"
+  methods:
+    - GET
+    - POST
+    - OPTIONS
+  headers:
+    - Accept
+    - Accept-Language
+    - Content-Language
+    - Content-Type
+    - Authorization
+  exposed_headers:
+    - Content-Length
+    - Content-Range
+  credentials: true
+  max_age: 3600
+plugin: cors
+
+---
+# Path Rewrite Plugin for AI MCP Server - Rewrites /ai-mcp-server/mcp to /mcp
+# Also ensures Accept header is set for FastMCP compatibility
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: mcp-ai-mcp-server-path-rewrite
+  namespace: mcp
+config:
+  replace:
+    uri: "/mcp"
+  add:
+    headers:
+      - "Accept:application/json, text/event-stream"
+plugin: request-transformer
+
+---
+# Rate Limiting Plugin for AI MCP Server
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: mcp-ai-mcp-server-rate-limit
+  namespace: mcp
+config:
+  minute: 100
+  hour: 1000
+  policy: local
+plugin: rate-limiting

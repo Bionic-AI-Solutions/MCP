@@ -60,7 +60,7 @@ kubectl wait --for=condition=available --timeout=300s deployment/mcp-minio-serve
 kubectl wait --for=condition=available --timeout=300s deployment/mcp-pdf-generator-server -n $NAMESPACE || true
 kubectl wait --for=condition=available --timeout=300s deployment/mcp-openproject-server -n $NAMESPACE || true
 kubectl wait --for=condition=available --timeout=300s deployment/mcp-meilisearch-server -n $NAMESPACE || true
-kubectl wait --for=condition=available --timeout=300s deployment/mcp-nano-banana-server -n $NAMESPACE || true
+kubectl wait --for=condition=available --timeout=300s deployment/mcp-genimage-server -n $NAMESPACE || true
 
 # Show status
 echo ""
@@ -82,5 +82,5 @@ echo "  MinIO:        https://mcp.baisoln.com/minio/health"
 echo "  PDF Gen:      https://mcp.baisoln.com/pdf-generator/health"
 echo "  OpenProject:  https://mcp.baisoln.com/openproject/health"
 echo "  MeiliSearch:  https://mcp.baisoln.com/meilisearch/health"
-echo "  Nano Banana:  https://mcp.baisoln.com/nano-banana/health"
+echo "  GenImage:     https://mcp.baisoln.com/genimage/health"
 

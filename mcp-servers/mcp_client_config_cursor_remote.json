@@ -1,16 +1,24 @@
 {
   "mcpServers": {
     "calculator-mcp-remote": {
-      "url": "https://mcp.bionicaisolutions.com/calculator/mcp",
+      "url": "https://mcp.baisoln.com/calculator/mcp",
       "description": "Calculator MCP Server - External access via HTTPS"
     },
     "postgres-mcp-remote": {
-      "url": "https://mcp.bionicaisolutions.com/postgres/mcp",
+      "url": "https://mcp.baisoln.com/postgres/mcp",
       "description": "PostgreSQL MCP Server - External access via HTTPS"
     },
     "minio-mcp-remote": {
-      "url": "https://mcp.bionicaisolutions.com/minio/mcp",
+      "url": "https://mcp.baisoln.com/minio/mcp",
       "description": "MinIO MCP Server - External access via HTTPS"
+    },
+    "ffmpeg-mcp-remote": {
+      "url": "https://mcp.baisoln.com/ffmpeg/mcp",
+      "description": "FFmpeg MCP Server - Video and audio processing - External access via HTTPS"
+    },
+    "meilisearch-mcp-remote": {
+      "url": "https://mcp.baisoln.com/meilisearch/mcp",
+      "description": "MeiliSearch MCP Server - External access via HTTPS"
     },
     "pdf-generator-mcp-remote": {
       "url": "https://mcp.bionicaisolutions.com/pdf-generator/mcp",
@@ -20,13 +28,13 @@
       "url": "https://mcp.bionicaisolutions.com/mail/mcp",
       "description": "Mail Service MCP Server - External access via HTTPS"
     },
-    "meilisearch-mcp-remote": {
-      "url": "https://mcp.baisoln.com/meilisearch/mcp",
-      "description": "MeiliSearch MCP Server - External access via HTTPS"
+    "genimage-mcp-remote": {
+      "url": "https://mcp.baisoln.com/genimage/mcp",
+      "description": "GenImage MCP Server - AI image generation with Runware API - External access via HTTPS"
     },
-    "nano-banana-mcp-remote": {
-      "url": "https://mcp.baisoln.com/nano-banana/mcp",
-      "description": "Nano Banana MCP Server - AI image generation with Gemini API - External access via HTTPS"
+    "ai-mcp-server-remote": {
+      "url": "https://mcp.baisoln.com/ai-mcp-server/mcp",
+      "description": "AI MCP Server - GPU-AI tools (OpenAI-compatible) - External access via HTTPS"
     }
   }
 }

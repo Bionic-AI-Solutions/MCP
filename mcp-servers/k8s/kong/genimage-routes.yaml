@@ -1,16 +1,16 @@
-# Kong IngressRoute for Nano Banana MCP Server
+# Kong IngressRoute for GenImage MCP Server
 # Supports both HTTP (/mcp) and SSE (/sse) protocols
 
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: mcp-nano-banana-ingress
+  name: mcp-genimage-ingress
   namespace: mcp
   annotations:
     konghq.com/strip-path: "false"
     konghq.com/preserve-host: "true"
     konghq.com/protocols: "https"
-    konghq.com/plugins: "mcp-nano-banana-cors,mcp-nano-banana-rate-limit,mcp-nano-banana-path-rewrite"
+    konghq.com/plugins: "mcp-genimage-cors,mcp-genimage-rate-limit,mcp-genimage-path-rewrite"
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
 spec:
   ingressClassName: kong
@@ -23,55 +23,55 @@ spec:
       http:
         paths:
           # Main MCP endpoint - HTTP protocol
-          - path: /nano-banana/mcp
+          - path: /genimage/mcp
             pathType: Exact
             backend:
               service:
-                name: mcp-nano-banana-server
+                name: mcp-genimage-server
                 port:
                   number: 8008
           # SSE endpoint - Server-Sent Events protocol
-          - path: /nano-banana/sse
+          - path: /genimage/sse
             pathType: Exact
             backend:
               service:
-                name: mcp-nano-banana-server
+                name: mcp-genimage-server
                 port:
                   number: 8008
-          # Discovery endpoint - handles POST to /nano-banana/ (for Cursor discovery)
-          - path: /nano-banana/
+          # Discovery endpoint - handles POST to /genimage/ (for Cursor discovery)
+          - path: /genimage/
             pathType: Exact
             backend:
               service:
-                name: mcp-nano-banana-server
+                name: mcp-genimage-server
                 port:
                   number: 8008
-          # Messages endpoint - handles /nano-banana/messages requests
-          - path: /nano-banana/messages
+          # Messages endpoint - handles /genimage/messages requests
+          - path: /genimage/messages
             pathType: Prefix
             backend:
               service:
-                name: mcp-nano-banana-server
+                name: mcp-genimage-server
                 port:
                   number: 8008
           # Health check endpoint (no auth required)
-          - path: /nano-banana/health
+          - path: /genimage/health
             pathType: Exact
             backend:
               service:
-                name: mcp-nano-banana-server
+                name: mcp-genimage-server
                 port:
                   number: 8008
 
 ---
-# CORS Plugin for Nano Banana
+# CORS Plugin for GenImage
 apiVersion: configuration.konghq.com/v1
 kind: KongPlugin
 metadata:
-  name: mcp-nano-banana-cors
+  name: mcp-genimage-cors
   namespace: mcp
   labels:
-    app: mcp-nano-banana-server
+    app: mcp-genimage-server
 config:
   origins:
     - "*"
@@ -93,14 +93,14 @@ config:
 plugin: cors
 
 ---
-# Rate Limiting Plugin for Nano Banana
+# Rate Limiting Plugin for GenImage
 apiVersion: configuration.konghq.com/v1
 kind: KongPlugin
 metadata:
-  name: mcp-nano-banana-rate-limit
+  name: mcp-genimage-rate-limit
   namespace: mcp
   labels:
-    app: mcp-nano-banana-server
+    app: mcp-genimage-server
 config:
   minute: 1000
   hour: 10000
@@ -110,15 +110,15 @@ config:
 plugin: rate-limiting
 
 ---
-# Path Rewrite Plugin for Nano Banana - Rewrites /nano-banana/mcp to /mcp
+# Path Rewrite Plugin for GenImage - Rewrites /genimage/mcp to /mcp
 # Also ensures Accept header is set for FastMCP compatibility
 apiVersion: configuration.konghq.com/v1
 kind: KongPlugin
 metadata:
-  name: mcp-nano-banana-path-rewrite
+  name: mcp-genimage-path-rewrite
   namespace: mcp
   labels:
-    app: mcp-nano-banana-server
+    app: mcp-genimage-server
 config:
   replace:
     uri: "/mcp"
@@ -126,5 +126,3 @@ config:
     headers:
       - "Accept:application/json, text/event-stream"
 plugin: request-transformer
-
-

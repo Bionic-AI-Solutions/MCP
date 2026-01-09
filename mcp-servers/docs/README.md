@@ -29,26 +29,31 @@ This directory contains usage guides for all MCP servers deployed on Kubernetes.
    - Comprehensive video/audio processing using FFmpeg
    - Tools: Convert formats, extract audio, merge videos, add subtitles, trim, resize, extract frames
 
-6. **[Nano Banana](./nano-banana.md)** - AI image generation with Gemini API
-   - Generate and edit images using Google Gemini AI
-   - Tools: Generate images, edit images, generate text content
-   - Multi-tenant with per-tenant Gemini API keys
+6. **[GenImage](./genimage.md)** - AI image generation with Runware API
+   - Generate, upscale, and process images using Runware AI
+   - Tools: Generate images, upscale images, remove backgrounds
+   - Multi-tenant with per-tenant Runware API keys
+
+7. **[AI MCP Server](./ai-mcp-server.md)** - Comprehensive AI capabilities with multi-provider support
+   - LLM chat/completions, audio processing, embeddings, video generation/recognition
+   - Tools: 31 tools covering LLM, audio, embeddings, video, WAN2, and prompt-based operations
+   - Multi-tenant with provider routing (GPU-AI API, OpenRouter, Eleven Labs, OpenAI)
 
 ### Communication & Collaboration
 
-7. **[Mail](./mail.md)** - Email sending with multi-tenant support
+8. **[Mail](./mail.md)** - Email sending with multi-tenant support
    - Send emails via mail service API
    - Tools: Send email, send with attachments, bulk sending
    - Supports HTML and text emails
 
-8. **[OpenProject](./openproject.md)** - Project management operations
+9. **[OpenProject](./openproject.md)** - Project management operations
    - Comprehensive OpenProject API integration
    - Tools: Projects, work packages, users, attachments, relations, hierarchy management
    - Extensive project management capabilities
 
 ### Search & Discovery
 
-9. **[MeiliSearch](./meilisearch.md)** - Search engine with multi-tenant support
+10. **[MeiliSearch](./meilisearch.md)** - Search engine with multi-tenant support
    - Full-text search engine operations
    - Tools: Index management, document operations, search with filters and sorting
 
@@ -71,7 +76,8 @@ All servers are accessible via HTTPS:
 - **Mail**: `https://mcp.bionicaisolutions.com/mail/mcp`
 - **OpenProject**: `https://mcp.baisoln.com/openproject/mcp`
 - **MeiliSearch**: `https://mcp.baisoln.com/meilisearch/mcp`
-- **Nano Banana**: `https://mcp.baisoln.com/nano-banana/mcp`
+- **GenImage**: `https://mcp.baisoln.com/genimage/mcp`
+- **AI MCP Server**: `https://mcp.baisoln.com/ai-mcp-server/mcp`
 
 ## Multi-Tenant Servers
 
@@ -82,7 +88,8 @@ The following servers support multi-tenancy (require tenant registration):
 - PDF Generator
 - Mail
 - MeiliSearch
-- Nano Banana
+- GenImage
+- AI MCP Server
 
 Each multi-tenant server:
 - Stores tenant configurations in Redis

@@ -1,0 +1,107 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mcp-ai-mcp-server-config
+  namespace: mcp
+  labels:
+    app: mcp-ai-mcp-server
+    app.kubernetes.io/name: mcp-ai-mcp-server
+data:
+  SERVER_NAME: "AI MCP Server"
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  REDIS_DB: "8"
+  PYTHONPATH: "/app/src"
+  FASTMCP_TRANSPORT: "http"
+  FASTMCP_HOST: "0.0.0.0"
+  FASTMCP_PORT: "8009"
+  FASTMCP_STATELESS_HTTP: "true"
+  FASTMCP_JSON_RESPONSE: "true"
+  # Default GPU-AI API configuration
+  AI_MCP_SERVER_DEFAULT_API_BASE_URL: "http://192.168.0.10:8000"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-ai-mcp-server
+  namespace: mcp
+  labels:
+    app: mcp-ai-mcp-server
+    app.kubernetes.io/name: mcp-ai-mcp-server
+    app.kubernetes.io/component: server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-ai-mcp-server
+  template:
+    metadata:
+      labels:
+        app: mcp-ai-mcp-server
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: ubuntu
+      imagePullSecrets:
+        - name: dockerhub-pull-secret
+      containers:
+        - name: ai-mcp-server
+          image: docker.io/docker4zerocool/mcp-servers-ai-mcp-server:latest
+          imagePullPolicy: Always
+          command:
+            - fastmcp
+            - run
+            - src/mcp_servers/ai_mcp_server/server.py
+            - --transport
+            - http
+            - --port
+            - "8009"
+            - --host
+            - 0.0.0.0
+          ports:
+            - containerPort: 8009
+              name: http
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: mcp-ai-mcp-server-config
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "300m"
+            limits:
+              memory: "2Gi"
+              cpu: "2000m"
+          livenessProbe:
+            tcpSocket:
+              port: 8009
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: 8009
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-ai-mcp-server
+  namespace: mcp
+  labels:
+    app: mcp-ai-mcp-server
+    app.kubernetes.io/name: mcp-ai-mcp-server
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8009
+      targetPort: 8009
+      protocol: TCP
+      name: http
+  selector:
+    app: mcp-ai-mcp-server

@@ -20,7 +20,8 @@ resources:
   - mail/deployment.yaml
   - openproject/deployment.yaml
   - meilisearch/deployment.yaml
-  - nano-banana/deployment.yaml
+  - genImage/deployment.yaml
+  - ai-mcp-server/deployment.yaml
   
   # Kong Ingress Routes
   - kong/calculator-routes.yaml
@@ -31,7 +32,8 @@ resources:
   - kong/mail-routes.yaml
   - kong/openproject-routes.yaml
   - kong/meilisearch-routes.yaml
-  - kong/nano-banana-routes.yaml
+  - kong/genimage-routes.yaml
+  - kong/ai-mcp-server-routes.yaml
 
 # Image transformers - using Docker Hub images
 images:
@@ -59,8 +61,11 @@ images:
   - name: mcp-servers-meilisearch
     newName: docker.io/docker4zerocool/mcp-servers-meilisearch
     newTag: latest
-  - name: mcp-servers-nano-banana
-    newName: docker.io/docker4zerocool/mcp-servers-nano-banana
+  - name: mcp-servers-genimage
+    newName: docker.io/docker4zerocool/mcp-servers-genimage
+    newTag: latest
+  - name: mcp-servers-ai-mcp-server
+    newName: docker.io/docker4zerocool/mcp-servers-ai-mcp-server
     newTag: latest
 
 commonLabels:
