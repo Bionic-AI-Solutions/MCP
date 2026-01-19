@@ -70,8 +70,12 @@ async def minio_list_buckets(
         await ctx.info(f"Listing buckets for tenant: {tenant_id}")
 
     try:
-        client = await tenant_manager.get_client(tenant_id)
-        buckets = client.list_buckets()
+        client_info = await tenant_manager.get_client(tenant_id)
+        client = client_info["client"]
+        semaphore = client_info["semaphore"]
+        
+        async with semaphore:
+            buckets = client.list_buckets()
         return {
             "success": True,
             "buckets": [
@@ -98,8 +102,12 @@ async def minio_create_bucket(
         await ctx.info(f"Creating bucket '{bucket_name}' for tenant: {tenant_id}")
 
     try:
-        client = await tenant_manager.get_client(tenant_id)
-        client.make_bucket(bucket_name, location=region)
+        client_info = await tenant_manager.get_client(tenant_id)
+        client = client_info["client"]
+        semaphore = client_info["semaphore"]
+        
+        async with semaphore:
+            client.make_bucket(bucket_name, location=region)
         return {"success": True, "message": f"Bucket '{bucket_name}' created successfully"}
     except S3Error as e:
         return {"success": False, "error": str(e)}
@@ -116,8 +124,12 @@ async def minio_delete_bucket(
         await ctx.info(f"Deleting bucket '{bucket_name}' for tenant: {tenant_id}")
 
     try:
-        client = await tenant_manager.get_client(tenant_id)
-        client.remove_bucket(bucket_name)
+        client_info = await tenant_manager.get_client(tenant_id)
+        client = client_info["client"]
+        semaphore = client_info["semaphore"]
+        
+        async with semaphore:
+            client.remove_bucket(bucket_name)
         return {"success": True, "message": f"Bucket '{bucket_name}' deleted successfully"}
     except S3Error as e:
         return {"success": False, "error": str(e)}
@@ -134,8 +146,12 @@ async def minio_bucket_exists(
         await ctx.info(f"Checking if bucket '{bucket_name}' exists for tenant: {tenant_id}")
 
     try:
-        client = await tenant_manager.get_client(tenant_id)
-        exists = client.bucket_exists(bucket_name)
+        client_info = await tenant_manager.get_client(tenant_id)
+        client = client_info["client"]
+        semaphore = client_info["semaphore"]
+        
+        async with semaphore:
+            exists = client.bucket_exists(bucket_name)
         return {"success": True, "exists": exists}
     except S3Error as e:
         return {"success": False, "error": str(e)}
@@ -154,8 +170,12 @@ async def minio_list_objects(
         await ctx.info(f"Listing objects in bucket '{bucket_name}' for tenant: {tenant_id}")
 
     try:
-        client = await tenant_manager.get_client(tenant_id)
-        objects = client.list_objects(bucket_name, prefix=prefix, recursive=recursive)
+        client_info = await tenant_manager.get_client(tenant_id)
+        client = client_info["client"]
+        semaphore = client_info["semaphore"]
+        
+        async with semaphore:
+            objects = client.list_objects(bucket_name, prefix=prefix, recursive=recursive)
         return {
             "success": True,
             "objects": [
@@ -186,18 +206,22 @@ async def minio_upload_object(
         await ctx.info(f"Uploading object '{object_name}' to bucket '{bucket_name}' for tenant: {tenant_id}")
 
     try:
-        client = await tenant_manager.get_client(tenant_id)
+        client_info = await tenant_manager.get_client(tenant_id)
+        client = client_info["client"]
+        semaphore = client_info["semaphore"]
+        
         data_bytes = data.encode("utf-8")
         data_stream = BytesIO(data_bytes)
         length = len(data_bytes)
         
-        client.put_object(
-            bucket_name,
-            object_name,
-            data_stream,
-            length,
-            content_type=content_type or "application/octet-stream",
-        )
+        async with semaphore:
+            client.put_object(
+                bucket_name,
+                object_name,
+                data_stream,
+                length,
+                content_type=content_type or "application/octet-stream",
+            )
         return {"success": True, "message": f"Object '{object_name}' uploaded successfully"}
     except S3Error as e:
         return {"success": False, "error": str(e)}
@@ -215,11 +239,15 @@ async def minio_download_object(
         await ctx.info(f"Downloading object '{object_name}' from bucket '{bucket_name}' for tenant: {tenant_id}")
 
     try:
-        client = await tenant_manager.get_client(tenant_id)
-        response = client.get_object(bucket_name, object_name)
-        data = response.read()
-        response.close()
-        response.release_conn()
+        client_info = await tenant_manager.get_client(tenant_id)
+        client = client_info["client"]
+        semaphore = client_info["semaphore"]
+        
+        async with semaphore:
+            response = client.get_object(bucket_name, object_name)
+            data = response.read()
+            response.close()
+            response.release_conn()
         
         return {
             "success": True,
@@ -242,8 +270,12 @@ async def minio_delete_object(
         await ctx.info(f"Deleting object '{object_name}' from bucket '{bucket_name}' for tenant: {tenant_id}")
 
     try:
-        client = await tenant_manager.get_client(tenant_id)
-        client.remove_object(bucket_name, object_name)
+        client_info = await tenant_manager.get_client(tenant_id)
+        client = client_info["client"]
+        semaphore = client_info["semaphore"]
+        
+        async with semaphore:
+            client.remove_object(bucket_name, object_name)
         return {"success": True, "message": f"Object '{object_name}' deleted successfully"}
     except S3Error as e:
         return {"success": False, "error": str(e)}
@@ -257,9 +289,20 @@ async def minio_register_tenant(
     secret_key: str,
     secure: bool = True,
     region: Optional[str] = None,
+    max_concurrent_requests: int = 100,
     ctx: Optional[Context] = None,
 ) -> Dict[str, Any]:
-    """Register a new tenant configuration."""
+    """Register a new tenant configuration with concurrency control.
+    
+    Args:
+        tenant_id: Unique identifier for this tenant
+        endpoint: MinIO endpoint (e.g., 'minio.example.com:9000')
+        access_key: MinIO access key
+        secret_key: MinIO secret key
+        secure: Use HTTPS/TLS (default: True)
+        region: S3 region (optional)
+        max_concurrent_requests: Maximum concurrent requests per tenant (default: 100)
+    """
     if ctx:
         await ctx.info(f"Registering tenant: {tenant_id}")
 
@@ -275,6 +318,7 @@ async def minio_register_tenant(
         secret_key=secret_key,
         secure=secure,
         region=region,
+        max_concurrent_requests=max_concurrent_requests,
     )
 
     await tenant_manager.register_tenant(config)

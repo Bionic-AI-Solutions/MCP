@@ -25,7 +25,7 @@ RUN pip install --no-cache-dir uv
 COPY pyproject.toml ./
 
 # Install dependencies (including fastmcp)
-RUN uv pip install --system fastmcp psycopg[binary,pool] minio pydantic python-dotenv redis weasyprint reportlab httpx email-validator aiohttp meilisearch google-genai
+RUN uv pip install --system fastmcp psycopg[binary,pool] minio pydantic python-dotenv redis weasyprint reportlab httpx email-validator aiohttp meilisearch google-genai langfuse
 
 # Calculator stage
 FROM base as calculator
@@ -128,9 +128,7 @@ ENV PYTHONPATH=/app/src
 EXPOSE 8008
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8008/health || exit 1
-CMD ["fastmcp", "run", "src/mcp_servers/genImage/server.py", "--transport", "http", "--port", "8008", "--host", "0.0.0.0"]
-
-# AI MCP Server stage
+CMD ["fastmcp", "run", "src/mcp_servers/genImage/server.py", "--transport", "http", "--port", "8008", "--host", "0.0.0.0"]# AI MCP Server stage
 FROM base as ai-mcp-server
 COPY src/ ./src/
 WORKDIR /app
@@ -139,3 +137,23 @@ EXPOSE 8009
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8009/health || exit 1
 CMD ["fastmcp", "run", "src/mcp_servers/ai_mcp_server/server.py", "--transport", "http", "--port", "8009", "--host", "0.0.0.0"]
+
+# Redis MCP Server stage
+FROM base as redis
+COPY src/ ./src/
+WORKDIR /app
+ENV PYTHONPATH=/app/src
+EXPOSE 8010
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8010/health || exit 1
+CMD ["fastmcp", "run", "src/mcp_servers/redis/server.py", "--transport", "http", "--port", "8010", "--host", "0.0.0.0"]
+
+# Langfuse stage
+FROM base as langfuse
+COPY src/ ./src/
+WORKDIR /app
+ENV PYTHONPATH=/app/src
+EXPOSE 8011
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8011/health || exit 1
+CMD ["fastmcp", "run", "src/mcp_servers/langfuse/server.py", "--transport", "http", "--port", "8011", "--host", "0.0.0.0"]

@@ -181,9 +181,23 @@ async def pg_register_tenant(
     min_pool_size: int = 2,
     max_pool_size: int = 10,
     ssl: bool = False,
+    max_concurrent_requests: int = 100,
     ctx: Optional[Context] = None,
 ) -> Dict[str, Any]:
-    """Register a new tenant configuration."""
+    """Register a new tenant configuration with concurrency control.
+    
+    Args:
+        tenant_id: Unique identifier for this tenant
+        host: PostgreSQL host
+        database: Database name
+        user: Username
+        password: Password
+        port: PostgreSQL port (default: 5432)
+        min_pool_size: Minimum connection pool size (default: 2)
+        max_pool_size: Maximum connection pool size (default: 10)
+        ssl: Use SSL/TLS (default: False)
+        max_concurrent_requests: Maximum concurrent requests per tenant (default: 100)
+    """
     if ctx:
         await ctx.info(f"Registering tenant: {tenant_id}")
 
@@ -202,6 +216,7 @@ async def pg_register_tenant(
         min_pool_size=min_pool_size,
         max_pool_size=max_pool_size,
         ssl=ssl,
+        max_concurrent_requests=max_concurrent_requests,
     )
 
     await tenant_manager.register_tenant(config)

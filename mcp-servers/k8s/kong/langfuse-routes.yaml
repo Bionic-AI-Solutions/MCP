@@ -1,0 +1,128 @@
+# Kong IngressRoute for Langfuse MCP Server
+# Supports both HTTP (/mcp) and SSE (/sse) protocols
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mcp-langfuse-ingress
+  namespace: mcp
+  annotations:
+    konghq.com/strip-path: "false"
+    konghq.com/preserve-host: "true"
+    konghq.com/protocols: "https"
+    konghq.com/plugins: "mcp-langfuse-cors,mcp-langfuse-rate-limit,mcp-langfuse-path-rewrite"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: kong
+  tls:
+    - hosts:
+        - mcp.baisoln.com
+      secretName: mcp-baisoln-com-tls
+  rules:
+    - host: mcp.baisoln.com
+      http:
+        paths:
+          # Main MCP endpoint - HTTP protocol
+          - path: /langfuse/mcp
+            pathType: Exact
+            backend:
+              service:
+                name: mcp-langfuse-server
+                port:
+                  number: 8011
+          # SSE endpoint - Server-Sent Events protocol
+          - path: /langfuse/sse
+            pathType: Exact
+            backend:
+              service:
+                name: mcp-langfuse-server
+                port:
+                  number: 8011
+          # Discovery endpoint - handles POST to /langfuse/ (for Cursor discovery)
+          - path: /langfuse/
+            pathType: Exact
+            backend:
+              service:
+                name: mcp-langfuse-server
+                port:
+                  number: 8011
+          # Messages endpoint - handles /langfuse/messages requests
+          - path: /langfuse/messages
+            pathType: Prefix
+            backend:
+              service:
+                name: mcp-langfuse-server
+                port:
+                  number: 8011
+          # Health check endpoint (no auth required)
+          - path: /langfuse/health
+            pathType: Exact
+            backend:
+              service:
+                name: mcp-langfuse-server
+                port:
+                  number: 8011
+
+---
+# CORS Plugin for Langfuse
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: mcp-langfuse-cors
+  namespace: mcp
+  labels:
+    app: mcp-langfuse-server
+config:
+  origins:
+    - "*"
+  methods:
+    - GET
+    - POST
+    - OPTIONS
+  headers:
+    - Accept
+    - Content-Type
+    - Authorization
+    - X-API-Key
+    - Mcp-Session-Id
+  exposed_headers:
+    - Content-Type
+    - Content-Length
+  credentials: true
+  max_age: 3600
+plugin: cors
+
+---
+# Rate Limiting Plugin for Langfuse
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: mcp-langfuse-rate-limit
+  namespace: mcp
+  labels:
+    app: mcp-langfuse-server
+config:
+  minute: 1000
+  hour: 10000
+  day: 100000
+  limit_by: ip
+  policy: local
+plugin: rate-limiting
+
+---
+# Path Rewrite Plugin for Langfuse - Rewrites /langfuse/mcp to /mcp
+# Also ensures Accept header is set for FastMCP compatibility
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: mcp-langfuse-path-rewrite
+  namespace: mcp
+  labels:
+    app: mcp-langfuse-server
+config:
+  replace:
+    uri: "/mcp"
+  add:
+    headers:
+      - "Accept:application/json, text/event-stream"
+plugin: request-transformer

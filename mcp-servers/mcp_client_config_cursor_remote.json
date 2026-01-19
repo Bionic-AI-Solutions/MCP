@@ -35,6 +35,18 @@
     "ai-mcp-server-remote": {
       "url": "https://mcp.baisoln.com/ai-mcp-server/mcp",
       "description": "AI MCP Server - GPU-AI tools (OpenAI-compatible) - External access via HTTPS"
+    },
+    "openproject-mcp-remote": {
+      "url": "https://mcp.baisoln.com/openproject/mcp",
+      "description": "OpenProject MCP Server - Project management and work packages - External access via HTTPS"
+    },
+    "langfuse-mcp-remote": {
+      "url": "https://mcp.baisoln.com/langfuse/mcp",
+      "description": "Langfuse MCP Server - Observability and tracing with multi-tenant support - External access via HTTPS"
+    },
+    "redis-mcp-remote": {
+      "url": "https://mcp.bionicaisolutions.com/redis/mcp",
+      "description": "Redis MCP Server - Multi-tenant Redis operations - External access via HTTPS"
     }
   }
 }

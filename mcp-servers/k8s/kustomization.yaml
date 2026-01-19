@@ -22,6 +22,7 @@ resources:
   - meilisearch/deployment.yaml
   - genImage/deployment.yaml
   - ai-mcp-server/deployment.yaml
+  - langfuse/deployment.yaml
   
   # Kong Ingress Routes
   - kong/calculator-routes.yaml
@@ -34,6 +35,7 @@ resources:
   - kong/meilisearch-routes.yaml
   - kong/genimage-routes.yaml
   - kong/ai-mcp-server-routes.yaml
+  - kong/langfuse-routes.yaml
 
 # Image transformers - using Docker Hub images
 images:
@@ -67,8 +69,15 @@ images:
   - name: mcp-servers-ai-mcp-server
     newName: docker.io/docker4zerocool/mcp-servers-ai-mcp-server
     newTag: latest
+  - name: mcp-servers-langfuse
+    newName: docker.io/docker4zerocool/mcp-servers-langfuse
+    newTag: latest
 
 commonLabels:
   app.kubernetes.io/part-of: mcp-servers
   app.kubernetes.io/managed-by: kustomize
 
+# Patches to fix service selectors - remove Kustomize-added labels from selectors
+# so services only match on 'app' label that pods actually have
+patchesStrategicMerge:
+  - fix-service-selectors.yaml

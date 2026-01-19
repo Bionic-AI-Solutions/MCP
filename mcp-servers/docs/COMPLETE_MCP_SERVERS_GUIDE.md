@@ -18,8 +18,11 @@
    - [OpenProject](#9-openproject-mcp-server)
 6. [Search & Discovery](#search--discovery)
    - [MeiliSearch](#10-meilisearch-mcp-server)
-7. [Multi-Tenant Architecture](#multi-tenant-architecture)
-8. [Quick Reference](#quick-reference)
+7. [Data & Infrastructure](#data--infrastructure)
+   - [Redis](#11-redis-mcp-server)
+   - [Langfuse](#12-langfuse-mcp-server)
+8. [Multi-Tenant Architecture](#multi-tenant-architecture)
+9. [Quick Reference](#quick-reference)
 
 ---
 
@@ -47,6 +50,8 @@ All servers are accessible via HTTPS:
 | MeiliSearch | `https://mcp.baisoln.com/meilisearch/mcp` | 8007 |
 | GenImage | `https://mcp.baisoln.com/genimage/mcp` | 8008 |
 | AI MCP Server | `https://mcp.baisoln.com/ai-mcp-server/mcp` | 8009 |
+| Redis | `https://mcp.bionicaisolutions.com/redis/mcp` | 8010 |
+| Langfuse | `https://mcp.baisoln.com/langfuse/mcp` | 8011 |
 
 ### Health Checks
 
@@ -738,7 +743,7 @@ export MAIL_TENANT_1_DEFAULT_FROM_NAME="My App"
 - Attachments: Send emails with file attachments (base64-encoded)
 - Bulk sending: Send multiple emails concurrently
 - Default sender: Configure default from email and name per tenant
-- Redis persistence: Tenant configurations persist across restarts (Redis DB 4)
+- Redis persistence: Tenant configurations persist across restarts (Redis DB 3)
 
 ---
 
@@ -969,6 +974,207 @@ export MEILISEARCH_TENANT_1_API_KEY="your-master-key"
 
 ---
 
+## Data & Infrastructure
+
+### 11. Redis MCP Server
+
+#### Overview
+
+The Redis MCP server provides Redis operations with multi-tenant support. Each tenant can connect to their own Redis instance, allowing you to manage multiple Redis databases through a single MCP server.
+
+#### Connection
+
+**Remote (HTTPS):**
+```json
+{
+  "mcpServers": {
+    "redis-mcp-remote": {
+      "url": "https://mcp.bionicaisolutions.com/redis/mcp",
+      "description": "Redis MCP Server - Multi-tenant Redis operations - External access via HTTPS"
+    }
+  }
+}
+```
+
+**Local Development:**
+```bash
+docker compose up -d mcp-redis-server
+# Server available at http://localhost:8010
+```
+
+#### Getting Started
+
+**Step 1: Register a Tenant**
+
+```json
+{
+  "tenant_id": "my-tenant",
+  "host": "localhost",
+  "port": 6379,
+  "password": null,
+  "db": 0,
+  "ssl": false,
+  "decode_responses": true
+}
+```
+
+**Step 2: Use the Tools**
+
+#### Available Tools
+
+1. **`redis_register_tenant`** - Register Tenant
+   - Parameters: `tenant_id`, `host`, `port` (optional), `password` (optional), `db` (optional), `ssl` (optional), `decode_responses` (optional), `max_concurrent_requests` (optional)
+
+2. **`redis_get`** - Get Value
+   - Parameters: `tenant_id`, `key`
+   - Returns: Value associated with the key
+
+3. **`redis_set`** - Set Value
+   - Parameters: `tenant_id`, `key`, `value`, `ttl` (optional)
+   - Sets a value with optional expiration
+
+4. **`redis_delete`** - Delete Key
+   - Parameters: `tenant_id`, `key`
+   - Returns: Boolean indicating if key was deleted
+
+5. **`redis_keys`** - List Keys
+   - Parameters: `tenant_id`, `pattern` (optional, default: "*")
+   - Returns: List of keys matching the pattern
+
+6. **`redis_exists`** - Check Key Exists
+   - Parameters: `tenant_id`, `key`
+   - Returns: Boolean indicating existence
+
+7. **`redis_ttl`** - Get Time to Live
+   - Parameters: `tenant_id`, `key`
+   - Returns: TTL in seconds (-1 for persistent, -2 for non-existent)
+
+8. **`redis_info`** - Get Redis Server Information
+   - Parameters: `tenant_id`, `section` (optional)
+   - Returns: Redis server information
+
+9. **`redis_ping`** - Ping Redis Server
+   - Parameters: `tenant_id`
+   - Tests connection to Redis
+
+10. **`redis_execute_command`** - Execute Custom Command
+    - Parameters: `tenant_id`, `command`, `args` (optional)
+    - Execute any Redis command (HGET, HSET, LPUSH, etc.)
+
+#### Configuration via Environment Variables
+
+```bash
+export REDIS_TENANT_1_HOST="localhost"
+export REDIS_TENANT_1_PORT="6379"
+export REDIS_TENANT_1_PASSWORD=""
+export REDIS_TENANT_1_DB="0"
+export REDIS_TENANT_1_SSL="false"
+```
+
+#### Features
+
+- Multi-tenant: Each tenant connects to their own Redis instance
+- Redis persistence: Tenant configurations persist across restarts (Redis DB 4)
+- Full Redis support: All standard Redis commands via `redis_execute_command`
+- Key-value operations: GET, SET, DELETE, EXISTS, TTL
+- Pattern matching: List keys with glob-style patterns
+- Server information: Get Redis server info and stats
+
+---
+
+### 12. Langfuse MCP Server
+
+#### Overview
+
+The Langfuse MCP server provides observability and tracing operations with multi-tenant support. Each tenant uses their own Langfuse API keys, allowing you to manage traces, spans, generations, events, and scores across multiple Langfuse projects.
+
+#### Connection
+
+**Remote (HTTPS):**
+```json
+{
+  "mcpServers": {
+    "langfuse-mcp-remote": {
+      "url": "https://mcp.baisoln.com/langfuse/mcp",
+      "description": "Langfuse MCP Server - Observability and tracing with multi-tenant support - External access via HTTPS"
+    }
+  }
+}
+```
+
+**Local Development:**
+```bash
+docker compose up -d mcp-langfuse-server
+# Server available at http://localhost:8011
+```
+
+#### Getting Started
+
+**Step 1: Register a Tenant**
+
+```json
+{
+  "tenant_id": "my-tenant",
+  "secret_key": "sk-lf-...",
+  "public_key": "pk-lf-...",
+  "base_url": "https://langfuse.bionicaisolutions.com"
+}
+```
+
+**Step 2: Use the Tools**
+
+#### Available Tools
+
+1. **`lf_register_tenant`** - Register Tenant
+   - Parameters: `tenant_id`, `secret_key`, `public_key`, `base_url` (optional), `max_concurrent_requests` (optional)
+
+2. **`lf_create_trace`** - Create Trace
+   - Parameters: `tenant_id`, `name`, `user_id` (optional), `session_id` (optional), `metadata` (optional), `tags` (optional)
+   - Creates a new trace representing an execution flow
+
+3. **`lf_create_span`** - Create Span
+   - Parameters: `tenant_id`, `trace_id`, `name`, `start_time` (optional), `end_time` (optional), `metadata` (optional)
+   - Creates a span within a trace
+
+4. **`lf_create_generation`** - Create Generation
+   - Parameters: `tenant_id`, `trace_id`, `name`, `model` (optional), `model_parameters` (optional), `input` (optional), `output` (optional), `metadata` (optional)
+   - Tracks LLM/AI model calls
+
+5. **`lf_create_event`** - Create Event
+   - Parameters: `tenant_id`, `trace_id`, `name`, `metadata` (optional)
+   - Creates an event observation
+
+6. **`lf_create_score`** - Create Score
+   - Parameters: `tenant_id`, `name`, `value`, `trace_id` (optional), `observation_id` (optional), `comment` (optional)
+   - Creates a score for evaluation
+
+7. **`lf_get_trace`** - Get Trace
+   - Parameters: `tenant_id`, `trace_id`
+   - Retrieves a trace with all observations
+
+8. **`lf_get_project`** - Get Project Information
+   - Parameters: `tenant_id`
+   - Gets Langfuse project information
+
+#### Configuration via Environment Variables
+
+```bash
+export LANGFUSE_TENANT_1_SECRET_KEY="sk-lf-..."
+export LANGFUSE_TENANT_1_PUBLIC_KEY="pk-lf-..."
+export LANGFUSE_TENANT_1_BASE_URL="https://langfuse.bionicaisolutions.com"
+```
+
+#### Features
+
+- Multi-tenant: Each tenant uses their own Langfuse API keys
+- Redis persistence: Tenant configurations persist across restarts (Redis DB 9)
+- Full observability: Traces, spans, generations, events, and scores
+- LLM tracking: Track AI model calls with detailed metadata
+- Project management: Get project information and statistics
+- Flexible metadata: Attach custom metadata to all observations
+
+---
+
 ## Multi-Tenant Architecture
 
 ### Overview
@@ -979,13 +1185,15 @@ Most MCP servers support multi-tenancy, allowing multiple tenants to use the sam
 
 The following servers support multi-tenancy:
 
-- PostgreSQL (Redis DB 1)
-- MinIO (Redis DB 2)
-- PDF Generator (Redis DB 3)
-- Mail (Redis DB 4)
+- PostgreSQL (Redis DB 0)
+- MinIO (Redis DB 1)
+- PDF Generator (Redis DB 2)
+- Mail (Redis DB 3)
+- Redis (Redis DB 4)
 - MeiliSearch (Redis DB 5)
 - GenImage (Redis DB 7)
 - AI MCP Server (Redis DB 8)
+- Langfuse (Redis DB 9)
 
 ### Tenant Registration
 
@@ -1037,15 +1245,17 @@ export SERVER_TENANT_1_PARAM2="value2"
 | Server | Multi-Tenant | Tools Count | Redis DB | Port |
 |--------|-------------|-------------|----------|------|
 | Calculator | No | 7 | N/A | 8000 |
-| PostgreSQL | Yes | 4 | 1 | 8001 |
-| MinIO | Yes | 9 | 2 | 8002 |
-| PDF Generator | Yes | 2 | 3 | 8003 |
+| PostgreSQL | Yes | 4 | 0 | 8001 |
+| MinIO | Yes | 9 | 1 | 8002 |
+| PDF Generator | Yes | 2 | 2 | 8003 |
 | FFmpeg | No | 8 | N/A | 8004 |
-| Mail | Yes | 4 | 4 | 8005 |
+| Mail | Yes | 4 | 3 | 8005 |
 | OpenProject | No | 40+ | N/A | 8006 |
 | MeiliSearch | Yes | 9 | 5 | 8007 |
 | GenImage | Yes | 4 | 7 | 8008 |
 | AI MCP Server | Yes | 31 | 8 | 8009 |
+| Redis | Yes | 10 | 4 | 8010 |
+| Langfuse | Yes | 8 | 9 | 8011 |
 
 ### Common Patterns
 
@@ -1104,6 +1314,8 @@ For detailed information about each server, refer to the individual documentatio
 - `openproject.md`
 - `meilisearch.md`
 - `ai-mcp-server.md`
+- `redis.md`
+- `langfuse.md`
 
 For troubleshooting and advanced configuration, see:
 - `STATELESS_MULTI_TENANT.md` - Multi-tenant architecture details

@@ -224,6 +224,69 @@ services:
       retries: 3
       start_period: 10s
 
+  # Redis MCP Server
+  mcp-redis-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: redis
+    container_name: mcp-redis-server
+    ports:
+      - "8010:8010"
+    environment:
+      - SERVER_NAME=Redis Server
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=4
+      - REDIS_TENANT_1_HOST=${REDIS_TENANT_1_HOST:-redis}
+      - REDIS_TENANT_1_PORT=${REDIS_TENANT_1_PORT:-6379}
+      - REDIS_TENANT_1_PASSWORD=${REDIS_TENANT_1_PASSWORD:-}
+      - REDIS_TENANT_1_DB=${REDIS_TENANT_1_DB:-0}
+      - REDIS_TENANT_1_SSL=${REDIS_TENANT_1_SSL:-false}
+    restart: unless-stopped
+    networks:
+      - mcp-network
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8010/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Langfuse MCP Server
+  mcp-langfuse-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: langfuse
+    container_name: mcp-langfuse-server
+    ports:
+      - "8011:8011"
+    environment:
+      - SERVER_NAME=Langfuse Server
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=9
+      - LANGFUSE_TENANT_1_SECRET_KEY=${LANGFUSE_TENANT_1_SECRET_KEY:-}
+      - LANGFUSE_TENANT_1_PUBLIC_KEY=${LANGFUSE_TENANT_1_PUBLIC_KEY:-}
+      - LANGFUSE_TENANT_1_BASE_URL=${LANGFUSE_TENANT_1_BASE_URL:-https://langfuse.bionicaisolutions.com}
+      - LANGFUSE_TENANT_1_MAX_CONCURRENT=${LANGFUSE_TENANT_1_MAX_CONCURRENT:-100}
+    restart: unless-stopped
+    networks:
+      - mcp-network
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8011/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
 networks:
   mcp-network:
     driver: bridge

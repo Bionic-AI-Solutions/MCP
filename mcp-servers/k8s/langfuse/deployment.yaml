@@ -1,0 +1,107 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mcp-langfuse-config
+  namespace: mcp
+  labels:
+    app: mcp-langfuse-server
+    app.kubernetes.io/name: mcp-langfuse
+data:
+  SERVER_NAME: "Langfuse Server"
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  REDIS_DB: "9"
+  PYTHONPATH: "/app/src"
+  FASTMCP_TRANSPORT: "http"
+  FASTMCP_HOST: "0.0.0.0"
+  FASTMCP_PORT: "8011"
+  FASTMCP_STATELESS_HTTP: "true"
+  FASTMCP_JSON_RESPONSE: "true"
+  # Default Langfuse configuration
+  LANGFUSE_DEFAULT_BASE_URL: "https://langfuse.bionicaisolutions.com"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-langfuse-server
+  namespace: mcp
+  labels:
+    app: mcp-langfuse-server
+    app.kubernetes.io/name: mcp-langfuse
+    app.kubernetes.io/component: server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-langfuse-server
+  template:
+    metadata:
+      labels:
+        app: mcp-langfuse-server
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: ubuntu
+      imagePullSecrets:
+        - name: dockerhub-pull-secret
+      containers:
+        - name: langfuse
+          image: docker.io/docker4zerocool/mcp-servers-langfuse:latest
+          imagePullPolicy: Always
+          command:
+            - fastmcp
+            - run
+            - src/mcp_servers/langfuse/server.py
+            - --transport
+            - http
+            - --port
+            - "8011"
+            - --host
+            - 0.0.0.0
+          ports:
+            - containerPort: 8011
+              name: http
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: mcp-langfuse-config
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "200m"
+            limits:
+              memory: "512Mi"
+              cpu: "1000m"
+          livenessProbe:
+            tcpSocket:
+              port: 8011
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: 8011
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-langfuse-server
+  namespace: mcp
+  labels:
+    app: mcp-langfuse-server
+    app.kubernetes.io/name: mcp-langfuse
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8011
+      targetPort: 8011
+      protocol: TCP
+      name: http
+  selector:
+    app: mcp-langfuse-server

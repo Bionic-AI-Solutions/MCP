@@ -1,8 +1,9 @@
 """
-MinIO Tenant Manager
+Langfuse Tenant Manager
 
-Manages multiple MinIO tenant connections.
+Manages multiple Langfuse tenant connections.
 Tenant configurations are persisted in Redis for durability across restarts.
+Each tenant provides their own Langfuse API keys for isolation.
 """
 
 import json
@@ -10,34 +11,34 @@ import os
 import asyncio
 from typing import Optional, Dict, Any
 
-from minio import Minio
 from pydantic import BaseModel, Field
 import redis.asyncio as redis
 
 
-class MinioTenantConfig(BaseModel):
-    """Configuration for a single MinIO tenant."""
+class LangfuseTenantConfig(BaseModel):
+    """Configuration for a single Langfuse tenant."""
 
     tenant_id: str = Field(..., description="Unique identifier for this tenant")
-    endpoint: str = Field(..., description="MinIO endpoint (e.g., 'minio.example.com:9000')")
-    access_key: str = Field(..., description="MinIO access key")
-    secret_key: str = Field(..., description="MinIO secret key")
-    secure: bool = Field(default=True, description="Use HTTPS/TLS")
-    region: Optional[str] = Field(default=None, description="S3 region")
+    secret_key: str = Field(..., description="Langfuse secret key (sk-lf-...)")
+    public_key: str = Field(..., description="Langfuse public key (pk-lf-...)")
+    base_url: str = Field(
+        default="https://langfuse.bionicaisolutions.com",
+        description="Langfuse base URL",
+    )
     max_concurrent_requests: int = Field(
         default=100, description="Maximum concurrent requests per tenant"
     )
 
 
-class MinioTenantManager:
-    """Manages multiple MinIO tenant connections with concurrency control and Redis persistence."""
+class LangfuseTenantManager:
+    """Manages multiple Langfuse tenant connections with concurrency control and Redis persistence."""
 
     def __init__(self):
-        self.clients: Dict[str, Minio] = {}
-        self.configs: Dict[str, MinioTenantConfig] = {}
+        self.clients: Dict[str, Any] = {}
+        self.configs: Dict[str, LangfuseTenantConfig] = {}
         self.semaphores: Dict[str, asyncio.Semaphore] = {}
         self.redis_client: Optional[redis.Redis] = None
-        self.redis_key_prefix = "mcp:minio:tenant:"
+        self.redis_key_prefix = "mcp:langfuse:tenant:"
         self._redis_initialized = False
 
     async def _init_redis(self) -> None:
@@ -48,7 +49,7 @@ class MinioTenantManager:
         try:
             redis_host = os.getenv("REDIS_HOST", "redis")
             redis_port = int(os.getenv("REDIS_PORT", "6379"))
-            redis_db = int(os.getenv("REDIS_DB", "1"))  # Use DB 1 for MinIO (different from Postgres)
+            redis_db = int(os.getenv("REDIS_DB", "9"))  # Use DB 9 for Langfuse
             redis_password = os.getenv("REDIS_PASSWORD")
 
             self.redis_client = redis.Redis(
@@ -67,7 +68,7 @@ class MinioTenantManager:
             self.redis_client = None
             self._redis_initialized = True  # Mark as initialized to avoid retry loops
 
-    async def _save_to_redis(self, config: MinioTenantConfig) -> None:
+    async def _save_to_redis(self, config: LangfuseTenantConfig) -> None:
         """Save tenant configuration to Redis."""
         await self._init_redis()
         if not self.redis_client:
@@ -81,7 +82,7 @@ class MinioTenantManager:
         except Exception as e:
             print(f"Warning: Failed to save tenant config to Redis: {e}")
 
-    async def _load_from_redis(self, tenant_id: str) -> Optional[MinioTenantConfig]:
+    async def _load_from_redis(self, tenant_id: str) -> Optional[LangfuseTenantConfig]:
         """Load tenant configuration from Redis."""
         await self._init_redis()
         if not self.redis_client:
@@ -92,12 +93,12 @@ class MinioTenantManager:
             config_json = await self.redis_client.get(key)
             if config_json:
                 config_dict = json.loads(config_json)
-                return MinioTenantConfig(**config_dict)
+                return LangfuseTenantConfig(**config_dict)
         except Exception as e:
             print(f"Warning: Failed to load tenant config from Redis: {e}")
         return None
 
-    async def _load_all_from_redis(self) -> Dict[str, MinioTenantConfig]:
+    async def _load_all_from_redis(self) -> Dict[str, LangfuseTenantConfig]:
         """Load all tenant configurations from Redis."""
         await self._init_redis()
         if not self.redis_client:
@@ -116,43 +117,49 @@ class MinioTenantManager:
             print(f"Warning: Failed to load all tenant configs from Redis: {e}")
         return configs
 
-    def load_tenant_from_env(self, tenant_id: str) -> Optional[MinioTenantConfig]:
+    def load_tenant_from_env(self, tenant_id: str) -> Optional[LangfuseTenantConfig]:
         """Load tenant configuration from environment variables."""
-        prefix = f"MINIO_TENANT_{tenant_id.upper()}"
-        endpoint = os.getenv(f"{prefix}_ENDPOINT")
-        if not endpoint:
+        prefix = f"LANGFUSE_TENANT_{tenant_id.upper()}"
+        secret_key = os.getenv(f"{prefix}_SECRET_KEY")
+        if not secret_key:
             return None
 
-        return MinioTenantConfig(
+        return LangfuseTenantConfig(
             tenant_id=tenant_id,
-            endpoint=endpoint,
-            access_key=os.getenv(f"{prefix}_ACCESS_KEY", ""),
-            secret_key=os.getenv(f"{prefix}_SECRET_KEY", ""),
-            secure=os.getenv(f"{prefix}_SECURE", "true").lower() == "true",
-            region=os.getenv(f"{prefix}_REGION"),
+            secret_key=secret_key,
+            public_key=os.getenv(f"{prefix}_PUBLIC_KEY", ""),
+            base_url=os.getenv(
+                f"{prefix}_BASE_URL", "https://langfuse.bionicaisolutions.com"
+            ),
             max_concurrent_requests=int(os.getenv(f"{prefix}_MAX_CONCURRENT", "100")),
         )
 
-    async def register_tenant(self, config: MinioTenantConfig) -> None:
-        """Register a tenant and create a MinIO client with concurrency control."""
-        client = Minio(
-            config.endpoint,
-            access_key=config.access_key,
+    async def register_tenant(self, config: LangfuseTenantConfig) -> None:
+        """Register a tenant and create a Langfuse client with concurrency control."""
+        # Import here to avoid circular imports
+        from .client import LangfuseClientWrapper
+
+        # Create client wrapper for this tenant
+        wrapper = LangfuseClientWrapper(
             secret_key=config.secret_key,
-            secure=config.secure,
-            region=config.region,
+            public_key=config.public_key,
+            base_url=config.base_url,
+            semaphore=asyncio.Semaphore(config.max_concurrent_requests),
         )
-        self.clients[config.tenant_id] = client
+
+        # Store the client and config
+        self.clients[config.tenant_id] = {
+            "client": wrapper,
+            "config": config,
+            "semaphore": wrapper.semaphore,
+        }
         self.configs[config.tenant_id] = config
-        
-        # Create semaphore for concurrency control
-        self.semaphores[config.tenant_id] = asyncio.Semaphore(config.max_concurrent_requests)
 
         # Persist to Redis
         await self._save_to_redis(config)
 
     async def get_client(self, tenant_id: str) -> Dict[str, Any]:
-        """Get client info (MinIO client and semaphore) for a tenant (with concurrency control)."""
+        """Get client wrapper and semaphore for a tenant (with concurrency control)."""
         if tenant_id not in self.clients:
             # Try to load from Redis first
             config = await self._load_from_redis(tenant_id)
@@ -166,11 +173,7 @@ class MinioTenantManager:
                     f"Tenant '{tenant_id}' not found. Configure it via environment variables or register it programmatically."
                 )
 
-        return {
-            "client": self.clients[tenant_id],
-            "semaphore": self.semaphores[tenant_id],
-            "config": self.configs[tenant_id],
-        }
+        return self.clients[tenant_id]
 
     async def initialize(self) -> None:
         """Initialize tenant manager - load all tenants from Redis and environment."""
@@ -183,8 +186,12 @@ class MinioTenantManager:
         # Check for common tenant IDs
         tenant_ids = set()
         for key in os.environ:
-            if key.startswith("MINIO_TENANT_") and key.endswith("_ENDPOINT"):
-                tenant_id = key.replace("MINIO_TENANT_", "").replace("_ENDPOINT", "").lower()
+            if key.startswith("LANGFUSE_TENANT_") and key.endswith("_SECRET_KEY"):
+                tenant_id = (
+                    key.replace("LANGFUSE_TENANT_", "")
+                    .replace("_SECRET_KEY", "")
+                    .lower()
+                )
                 tenant_ids.add(tenant_id)
 
         for tenant_id in tenant_ids:
@@ -194,11 +201,17 @@ class MinioTenantManager:
                     await self.register_tenant(config)
 
     async def close_all(self) -> None:
-        """Close Redis connection."""
+        """Close all connections and Redis connection."""
+        # Close all HTTP clients
+        for client_info in self.clients.values():
+            wrapper = client_info.get("client")
+            if wrapper:
+                await wrapper.close()
+
         self.clients.clear()
         self.configs.clear()
         self.semaphores.clear()
-        
+
         if self.redis_client:
             await self.redis_client.aclose()
             self.redis_client = None

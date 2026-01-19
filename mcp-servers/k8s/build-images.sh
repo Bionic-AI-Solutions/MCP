@@ -61,6 +61,14 @@ echo ""
 echo "Building ai-mcp-server image..."
 docker build --target ai-mcp-server -t "$IMAGE_REGISTRY/$IMAGE_NAME-ai-mcp-server:$IMAGE_TAG" .
 
+echo ""
+echo "Building redis image..."
+docker build --target redis -t "$IMAGE_REGISTRY/$IMAGE_NAME-redis:$IMAGE_TAG" .
+
+echo ""
+echo "Building langfuse image..."
+docker build --target langfuse -t "$IMAGE_REGISTRY/$IMAGE_NAME-langfuse:$IMAGE_TAG" .
+
 # Push all images to registry
 echo ""
 echo "Pushing images to registry..."
@@ -74,6 +82,8 @@ docker push "$IMAGE_REGISTRY/$IMAGE_NAME-openproject:$IMAGE_TAG"
 docker push "$IMAGE_REGISTRY/$IMAGE_NAME-meilisearch:$IMAGE_TAG"
 docker push "$IMAGE_REGISTRY/$IMAGE_NAME-genimage:$IMAGE_TAG"
 docker push "$IMAGE_REGISTRY/$IMAGE_NAME-ai-mcp-server:$IMAGE_TAG"
+docker push "$IMAGE_REGISTRY/$IMAGE_NAME-redis:$IMAGE_TAG"
+docker push "$IMAGE_REGISTRY/$IMAGE_NAME-langfuse:$IMAGE_TAG"
 
 echo ""
 echo "Build and push complete!"
@@ -89,6 +99,8 @@ echo "  - $IMAGE_REGISTRY/$IMAGE_NAME-openproject:$IMAGE_TAG"
 echo "  - $IMAGE_REGISTRY/$IMAGE_NAME-meilisearch:$IMAGE_TAG"
 echo "  - $IMAGE_REGISTRY/$IMAGE_NAME-genimage:$IMAGE_TAG"
 echo "  - $IMAGE_REGISTRY/$IMAGE_NAME-ai-mcp-server:$IMAGE_TAG"
+echo "  - $IMAGE_REGISTRY/$IMAGE_NAME-redis:$IMAGE_TAG"
+echo "  - $IMAGE_REGISTRY/$IMAGE_NAME-langfuse:$IMAGE_TAG"
 
 # Restart Kubernetes deployments
 if command -v kubectl &> /dev/null; then
@@ -130,6 +142,12 @@ if command -v kubectl &> /dev/null; then
         echo "  Restarting ai-mcp-server deployment..."
         kubectl rollout restart deployment/mcp-ai-mcp-server -n "$NAMESPACE" || echo "    Warning: ai-mcp-server deployment not found"
         
+        echo "  Restarting redis deployment..."
+        kubectl rollout restart deployment/mcp-redis-server -n "$NAMESPACE" || echo "    Warning: redis deployment not found"
+        
+        echo "  Restarting langfuse deployment..."
+        kubectl rollout restart deployment/mcp-langfuse-server -n "$NAMESPACE" || echo "    Warning: langfuse deployment not found"
+        
         echo ""
         echo "Waiting for rollouts to complete..."
         kubectl rollout status deployment/mcp-calculator-server -n "$NAMESPACE" --timeout=300s || true
@@ -142,6 +160,8 @@ if command -v kubectl &> /dev/null; then
         kubectl rollout status deployment/mcp-meilisearch-server -n "$NAMESPACE" --timeout=300s || true
         kubectl rollout status deployment/mcp-genimage-server -n "$NAMESPACE" --timeout=300s || true
         kubectl rollout status deployment/mcp-ai-mcp-server -n "$NAMESPACE" --timeout=300s || true
+        kubectl rollout status deployment/mcp-redis-server -n "$NAMESPACE" --timeout=300s || true
+        kubectl rollout status deployment/mcp-langfuse-server -n "$NAMESPACE" --timeout=300s || true
         
         echo ""
         echo "Pod status:"

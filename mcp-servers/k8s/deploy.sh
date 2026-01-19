@@ -61,6 +61,7 @@ kubectl wait --for=condition=available --timeout=300s deployment/mcp-pdf-generat
 kubectl wait --for=condition=available --timeout=300s deployment/mcp-openproject-server -n $NAMESPACE || true
 kubectl wait --for=condition=available --timeout=300s deployment/mcp-meilisearch-server -n $NAMESPACE || true
 kubectl wait --for=condition=available --timeout=300s deployment/mcp-genimage-server -n $NAMESPACE || true
+kubectl wait --for=condition=available --timeout=300s deployment/mcp-langfuse-server -n $NAMESPACE || true
 
 # Show status
 echo ""
@@ -83,4 +84,5 @@ echo "  PDF Gen:      https://mcp.baisoln.com/pdf-generator/health"
 echo "  OpenProject:  https://mcp.baisoln.com/openproject/health"
 echo "  MeiliSearch:  https://mcp.baisoln.com/meilisearch/health"
 echo "  GenImage:     https://mcp.baisoln.com/genimage/health"
+echo "  Langfuse:     https://mcp.baisoln.com/langfuse/health"
 
