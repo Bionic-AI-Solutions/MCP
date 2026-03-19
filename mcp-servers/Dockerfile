@@ -90,9 +90,7 @@ ENV PYTHONPATH=/app/src
 EXPOSE 8004
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8004/health || exit 1
-CMD ["fastmcp", "run", "src/mcp_servers/ffmpeg/server.py", "--transport", "http", "--port", "8004", "--host", "0.0.0.0"]
-
-# Mail stage
+CMD ["fastmcp", "run", "src/mcp_servers/ffmpeg/server.py", "--transport", "http", "--port", "8004", "--host", "0.0.0.0"]# Mail stage
 FROM base as mail
 COPY src/ ./src/
 WORKDIR /app
@@ -118,9 +116,7 @@ ENV PYTHONPATH=/app/src
 EXPOSE 8007
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8007/health || exit 1
-CMD ["fastmcp", "run", "src/mcp_servers/meilisearch/server.py", "--transport", "http", "--port", "8007", "--host", "0.0.0.0"]
-
-# GenImage stage
+CMD ["fastmcp", "run", "src/mcp_servers/meilisearch/server.py", "--transport", "http", "--port", "8007", "--host", "0.0.0.0"]# GenImage stage
 FROM base as genImage
 COPY src/ ./src/
 WORKDIR /app
@@ -157,3 +153,15 @@ EXPOSE 8011
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8011/health || exit 1
 CMD ["fastmcp", "run", "src/mcp_servers/langfuse/server.py", "--transport", "http", "--port", "8011", "--host", "0.0.0.0"]
+
+# Letta stage
+FROM base AS letta
+COPY src/ ./src/
+WORKDIR /app
+ENV PYTHONPATH=/app/src
+ENV PYTHONDONTWRITEBYTECODE=1
+RUN python -c "import compileall; compileall.compile_dir('/app/src', force=True, quiet=1)"
+EXPOSE 8012
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8012/health || exit 1
+CMD ["python", "-c", "from mcp_servers.letta.server import mcp; import uvicorn; uvicorn.run(mcp.http_app(), host='0.0.0.0', port=8012)"]

@@ -1,0 +1,378 @@
+#!/usr/bin/env bash
+# mcp-rpc — MCP JSON-RPC over HTTP helper for Claude Code skills
+# Handles session management, SSE parsing, and server routing.
+#
+# Usage:
+#   mcp-rpc servers                          List all configured servers
+#   mcp-rpc init <server>                    Initialize session, print session ID
+#   mcp-rpc tools <server> [--session ID]    List tools (JSON)
+#   mcp-rpc call <server> <tool> [argsJSON]  Call a tool, return result
+#   mcp-rpc health <server|all>              Quick health check
+#   mcp-rpc discover [server|all]            Live-query servers, show capabilities
+
+set -euo pipefail
+
+# ── Configuration ──────────────────────────────────────────────────────────
+
+CONF_FILE="${MCP_GATEWAY_CONF:-${HOME}/.claude/mcp-gateway.conf}"
+DEFAULT_GATEWAY="https://mcp.baisoln.com"
+CURL_TIMEOUT="${MCP_CURL_TIMEOUT:-60}"
+
+# Load gateway URL from config file or env
+if [ -n "${MCP_GATEWAY_URL:-}" ]; then
+    GATEWAY_URL="$MCP_GATEWAY_URL"
+elif [ -f "$CONF_FILE" ]; then
+    GATEWAY_URL=$(grep -m1 '^GATEWAY_URL=' "$CONF_FILE" 2>/dev/null | cut -d= -f2- | tr -d '"' || echo "$DEFAULT_GATEWAY")
+else
+    GATEWAY_URL="$DEFAULT_GATEWAY"
+fi
+
+ALT_GATEWAY="${MCP_ALT_GATEWAY_URL:-https://mcp.bionicaisolutions.com}"
+
+# ── Server Registry ───────────────────────────────────────────────────────
+# Format: name|path|transport|description
+# transport: stateful (requires session init) or stateless
+
+read -r -d '' SERVER_REGISTRY << 'REGISTRY' || true
+calculator|calculator|stateful|Math operations (add, subtract, multiply, divide, power, sqrt, modulo)
+postgres|postgres|stateful|PostgreSQL database (queries, transactions, schema inspection)
+minio|minio|stateful|S3-compatible object storage (buckets, upload, download)
+pdf-generator|pdf-generator|stateful|HTML to PDF generation
+ffmpeg|ffmpeg|stateless|Video/audio processing (convert, trim, merge, extract)
+mail|mail|stateful|Email sending (single, bulk, attachments)
+openproject|openproject|stateless|Project management (work packages, projects, users, time)
+meilisearch|meilisearch|stateful|Full-text search engine (indexes, documents, search)
+genimage|genimage|stateful|AI image generation (Runware API — generate, upscale, bg-remove)
+ai-mcp-server|ai-mcp-server|stateless|GPU AI inference (LLM, embeddings, TTS, image, video)
+redis|redis|stateful|Redis data structures (strings, hashes, lists, sets, sorted sets, pub/sub)
+langfuse|langfuse|stateless|LLM observability (traces, spans, generations, scores)
+letta|letta|stateful|AI agent platform (agents, memory, tools, conversations)
+REGISTRY
+
+# Servers on alternate domain
+ALT_DOMAIN_SERVERS="pdf-generator mail redis"
+
+# ── Helpers ────────────────────────────────────────────────────────────────
+
+get_server_url() {
+    local server="$1"
+    local path
+    path=$(echo "$SERVER_REGISTRY" | grep "^${server}|" | cut -d'|' -f2)
+    if [ -z "$path" ]; then
+        echo "Error: Unknown server '$server'" >&2
+        echo "Run: mcp-rpc servers" >&2
+        return 1
+    fi
+    # Check if server uses alternate domain
+    if echo "$ALT_DOMAIN_SERVERS" | grep -qw "$server"; then
+        echo "${ALT_GATEWAY}/${path}/mcp"
+    else
+        echo "${GATEWAY_URL}/${path}/mcp"
+    fi
+}
+
+get_transport() {
+    local server="$1"
+    echo "$SERVER_REGISTRY" | grep "^${server}|" | cut -d'|' -f3
+}
+
+json_rpc_payload() {
+    local id="$1" method="$2" params="$3"
+    printf '{"jsonrpc":"2.0","id":%s,"method":"%s","params":%s}' "$id" "$method" "$params"
+}
+
+# Parse SSE response — extract the last JSON data line
+parse_sse() {
+    local body="$1"
+    # SSE format: lines starting with "data: " followed by JSON
+    echo "$body" | grep '^data: ' | tail -1 | sed 's/^data: //'
+}
+
+# Make an MCP HTTP request, handle both SSE and JSON responses
+# Returns: JSON result on stdout, session ID on fd 3 (if provided)
+mcp_request() {
+    local url="$1" payload="$2" session_id="${3:-}"
+    local headers=(-H "Content-Type: application/json" -H "Accept: application/json, text/event-stream")
+
+    if [ -n "$session_id" ]; then
+        headers+=(-H "Mcp-Session-Id: ${session_id}")
+    fi
+
+    local tmpheaders tmpbody
+    tmpheaders=$(mktemp)
+    tmpbody=$(mktemp)
+
+    local status_code
+    status_code=$(curl -sk -D "$tmpheaders" -o "$tmpbody" -w '%{http_code}' \
+        --max-time "$CURL_TIMEOUT" \
+        -X POST "$url" \
+        "${headers[@]}" \
+        -d "$payload" 2>/dev/null) || {
+        rm -f "$tmpheaders" "$tmpbody"
+        echo '{"error":"Connection failed"}'
+        return 1
+    }
+
+    # Extract session ID from response headers
+    local new_session
+    new_session=$(grep -i '^mcp-session-id:' "$tmpheaders" 2>/dev/null | tail -1 | sed 's/^[^:]*: *//' | tr -d '\r' || true)
+    rm -f "$tmpheaders"
+
+    if [ -n "$new_session" ]; then
+        echo "$new_session" > /tmp/mcp-rpc-session-id.$$ 2>/dev/null || true
+    fi
+
+    local body
+    body=$(cat "$tmpbody")
+    rm -f "$tmpbody"
+
+    # Check if SSE response (lines starting with "data: ")
+    if echo "$body" | grep -q '^data: '; then
+        parse_sse "$body"
+    else
+        echo "$body"
+    fi
+}
+
+# ── Commands ───────────────────────────────────────────────────────────────
+
+cmd_servers() {
+    echo "MCP Server Registry"
+    echo "Gateway: $GATEWAY_URL"
+    echo "Alt Gateway: $ALT_GATEWAY"
+    echo ""
+    printf "%-16s %-10s %s\n" "SERVER" "TRANSPORT" "DESCRIPTION"
+    printf "%-16s %-10s %s\n" "──────" "─────────" "───────────"
+    echo "$SERVER_REGISTRY" | while IFS='|' read -r name path transport desc; do
+        printf "%-16s %-10s %s\n" "$name" "$transport" "$desc"
+    done
+}
+
+cmd_init() {
+    local server="$1"
+    local url
+    url=$(get_server_url "$server") || return 1
+
+    local payload
+    payload=$(json_rpc_payload 1 "initialize" '{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"mcp-rpc","version":"1.0"}}')
+
+    local result
+    result=$(mcp_request "$url" "$payload")
+
+    # Read session ID from temp file
+    local session_id=""
+    if [ -f "/tmp/mcp-rpc-session-id.$$" ]; then
+        session_id=$(cat "/tmp/mcp-rpc-session-id.$$")
+        rm -f "/tmp/mcp-rpc-session-id.$$"
+    fi
+
+    if [ -n "$session_id" ]; then
+        echo "$session_id"
+    else
+        # Try to extract from result
+        echo "$result" | python3 -c "import sys,json; print(json.load(sys.stdin).get('result',{}).get('sessionId','no-session'))" 2>/dev/null || echo "no-session"
+    fi
+}
+
+cmd_tools() {
+    local server="$1"
+    local session_id="${2:-}"
+    local url
+    url=$(get_server_url "$server") || return 1
+
+    local transport
+    transport=$(get_transport "$server")
+
+    # Auto-init if stateful and no session provided
+    if [ "$transport" = "stateful" ] && [ -z "$session_id" ]; then
+        session_id=$(cmd_init "$server" 2>/dev/null)
+    fi
+
+    local payload
+    payload=$(json_rpc_payload 2 "tools/list" '{}')
+
+    local result
+    result=$(mcp_request "$url" "$payload" "$session_id")
+
+    # Extract tool names
+    echo "$result" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    tools = data.get('result', {}).get('tools', [])
+    for t in tools:
+        print(f\"  {t['name']}: {t.get('description','')[:80]}\")
+    print(f'\nTotal: {len(tools)} tools')
+except Exception as e:
+    print(f'Parse error: {e}', file=sys.stderr)
+    sys.exit(1)
+" 2>&1
+}
+
+cmd_call() {
+    local server="$1" tool="$2" args="${3:-"{}"}"
+    local session_id="${4:-}"
+    local url
+    url=$(get_server_url "$server") || return 1
+
+    local transport
+    transport=$(get_transport "$server")
+
+    # Auto-init if stateful and no session provided
+    if [ "$transport" = "stateful" ] && [ -z "$session_id" ]; then
+        session_id=$(cmd_init "$server" 2>/dev/null)
+    fi
+
+    local payload
+    payload=$(json_rpc_payload 3 "tools/call" "{\"name\":\"${tool}\",\"arguments\":${args}}")
+
+    local result
+    result=$(mcp_request "$url" "$payload" "$session_id")
+
+    # Pretty-print the result
+    echo "$result" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    if 'error' in data:
+        err = data['error']
+        print(f'ERROR: {err.get(\"message\", str(err))}')
+        sys.exit(1)
+    result = data.get('result', data)
+    # Handle structuredContent
+    if 'structuredContent' in result:
+        print(json.dumps(result['structuredContent'], indent=2))
+    # Handle content array
+    elif 'content' in result and isinstance(result['content'], list):
+        for item in result['content']:
+            text = item.get('text', '')
+            try:
+                parsed = json.loads(text)
+                print(json.dumps(parsed, indent=2))
+            except (json.JSONDecodeError, TypeError):
+                print(text)
+    else:
+        print(json.dumps(result, indent=2))
+except json.JSONDecodeError:
+    print(sys.stdin.read() if hasattr(sys.stdin, 'read') else 'Parse error')
+    sys.exit(1)
+" 2>&1
+}
+
+cmd_health() {
+    local target="${1:-all}"
+
+    if [ "$target" = "all" ]; then
+        local servers
+        servers=$(echo "$SERVER_REGISTRY" | cut -d'|' -f1)
+    else
+        local servers="$target"
+    fi
+
+    printf "%-16s %-8s %-6s %s\n" "SERVER" "STATUS" "TOOLS" "DETAILS"
+    printf "%-16s %-8s %-6s %s\n" "──────" "──────" "─────" "───────"
+
+    for server in $servers; do
+        local url
+        url=$(get_server_url "$server" 2>/dev/null) || { printf "%-16s %-8s %-6s %s\n" "$server" "ERROR" "-" "Unknown server"; continue; }
+
+        # Try initialize
+        local transport
+        transport=$(get_transport "$server")
+        local session_id=""
+
+        if [ "$transport" = "stateful" ]; then
+            session_id=$(cmd_init "$server" 2>/dev/null) || true
+        fi
+
+        # Try tools/list
+        local payload
+        payload=$(json_rpc_payload 2 "tools/list" '{}')
+        local result
+        result=$(mcp_request "$url" "$payload" "$session_id" 2>/dev/null) || {
+            printf "%-16s %-8s %-6s %s\n" "$server" "DOWN" "-" "Connection failed"
+            continue
+        }
+
+        local tool_count
+        tool_count=$(echo "$result" | python3 -c "import sys,json; print(len(json.load(sys.stdin).get('result',{}).get('tools',[])))" 2>/dev/null || echo "?")
+
+        if [ "$tool_count" != "?" ] && [ "$tool_count" -gt 0 ] 2>/dev/null; then
+            printf "%-16s %-8s %-6s %s\n" "$server" "OK" "$tool_count" "$url"
+        else
+            printf "%-16s %-8s %-6s %s\n" "$server" "WARN" "$tool_count" "No tools or parse error"
+        fi
+    done
+}
+
+cmd_discover() {
+    local target="${1:-all}"
+    echo "Discovering MCP servers (live query)..."
+    echo ""
+    cmd_health "$target"
+}
+
+# ── Main ───────────────────────────────────────────────────────────────────
+
+usage() {
+    cat << 'EOF'
+mcp-rpc — MCP JSON-RPC over HTTP helper
+
+Usage:
+  mcp-rpc servers                             List all configured servers
+  mcp-rpc init <server>                       Initialize session, print session ID
+  mcp-rpc tools <server> [--session ID]       List available tools
+  mcp-rpc call <server> <tool> ['{"args"}']   Call a tool with JSON arguments
+  mcp-rpc health [server|all]                 Quick health check
+  mcp-rpc discover [server|all]               Live-query server capabilities
+
+Environment:
+  MCP_GATEWAY_URL    Override gateway URL (default: from ~/.claude/mcp-gateway.conf)
+  MCP_CURL_TIMEOUT   Curl timeout in seconds (default: 60)
+
+Config:
+  ~/.claude/mcp-gateway.conf    Gateway URL configuration file
+
+Examples:
+  mcp-rpc servers
+  mcp-rpc health all
+  mcp-rpc call calculator calc_add '{"a":2,"b":3}'
+  mcp-rpc call postgres pg_list_tables '{"tenant_id":"base"}'
+  mcp-rpc tools redis
+EOF
+}
+
+cmd="${1:-}"
+shift || true
+
+case "$cmd" in
+    servers)    cmd_servers ;;
+    init)       cmd_init "${1:?Server name required}" ;;
+    tools)
+        server="${1:?Server name required}"; shift
+        session=""
+        if [ "${1:-}" = "--session" ]; then session="${2:-}"; fi
+        cmd_tools "$server" "$session"
+        ;;
+    call)
+        server="${1:?Server name required}"; shift
+        tool="${1:?Tool name required}"; shift
+        args="${1:-"{}"}"
+        shift || true
+        session=""
+        if [ "${1:-}" = "--session" ]; then session="${2:-}"; fi
+        cmd_call "$server" "$tool" "$args" "$session"
+        ;;
+    health)     cmd_health "${1:-all}" ;;
+    discover)   cmd_discover "${1:-all}" ;;
+    help|--help|-h) usage ;;
+    *)
+        if [ -z "$cmd" ]; then
+            usage
+        else
+            echo "Unknown command: $cmd" >&2
+            usage >&2
+            exit 1
+        fi
+        ;;
+esac

@@ -12,9 +12,6 @@ data:
   REDIS_PORT: "6379"
   REDIS_DB: "7"
   PYTHONPATH: "/app/src"
-  # Default configuration
-  GENIMAGE_TENANT_1_BASE_URL: "https://api.runware.ai/v1"
-  GENIMAGE_TENANT_1_MAX_CONCURRENT: "10"
 
 ---
 apiVersion: apps/v1
@@ -61,24 +58,10 @@ spec:
           envFrom:
             - configMapRef:
                 name: mcp-genimage-config
-          env:
-            # Tenant configuration - these should be set via Secrets in production
-            - name: GENIMAGE_TENANT_1_RUNWARE_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: mcp-genimage-secrets
-                  key: tenant-1-runware-api-key
-                  optional: true
-            - name: GENIMAGE_TENANT_1_BASE_URL
-              valueFrom:
-                configMapKeyRef:
-                  name: mcp-genimage-config
-                  key: GENIMAGE_TENANT_1_BASE_URL
-            - name: GENIMAGE_TENANT_1_MAX_CONCURRENT
-              valueFrom:
-                configMapKeyRef:
-                  name: mcp-genimage-config
-                  key: GENIMAGE_TENANT_1_MAX_CONCURRENT
+          volumeMounts:
+            - name: tenant-config
+              mountPath: /etc/mcp
+              readOnly: true
           resources:
             requests:
               memory: "512Mi"
@@ -102,6 +85,13 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
+      volumes:
+        - name: tenant-config
+          secret:
+            secretName: mcp-genimage-tenants
+            items:
+              - key: tenants.json
+                path: tenants.json
 
 ---
 apiVersion: v1
@@ -121,15 +111,3 @@ spec:
       name: http
   selector:
     app: mcp-genimage-server
-
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: mcp-genimage-secrets
-  namespace: mcp
-  labels:
-    app: mcp-genimage-server
-type: Opaque
-stringData:
-  tenant-1-runware-api-key: ""  # Set via: kubectl create secret generic mcp-genimage-secrets --from-literal=tenant-1-runware-api-key=<key> -n mcp

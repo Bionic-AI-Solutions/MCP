@@ -56,6 +56,10 @@ spec:
           envFrom:
             - configMapRef:
                 name: mcp-ffmpeg-config
+          volumeMounts:
+            - name: tenant-config
+              mountPath: /etc/mcp
+              readOnly: true
           resources:
             requests:
               memory: "512Mi"
@@ -77,6 +81,13 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
+      volumes:
+        - name: tenant-config
+          secret:
+            secretName: mcp-ffmpeg-tenants
+            items:
+              - key: tenants.json
+                path: tenants.json
 
 ---
 apiVersion: v1

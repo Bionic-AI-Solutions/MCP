@@ -17,8 +17,6 @@ data:
   FASTMCP_PORT: "8009"
   FASTMCP_STATELESS_HTTP: "true"
   FASTMCP_JSON_RESPONSE: "true"
-  # Default GPU-AI API configuration
-  AI_MCP_SERVER_DEFAULT_API_BASE_URL: "http://192.168.0.10:8000"
 
 ---
 apiVersion: apps/v1
@@ -65,6 +63,10 @@ spec:
           envFrom:
             - configMapRef:
                 name: mcp-ai-mcp-server-config
+          volumeMounts:
+            - name: tenant-config
+              mountPath: /etc/mcp
+              readOnly: true
           resources:
             requests:
               memory: "512Mi"
@@ -86,6 +88,13 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
+      volumes:
+        - name: tenant-config
+          secret:
+            secretName: mcp-ai-mcp-server-tenants
+            items:
+              - key: tenants.json
+                path: tenants.json
 
 ---
 apiVersion: v1

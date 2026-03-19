@@ -1,0 +1,104 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mcp-redis-config
+  namespace: mcp
+  labels:
+    app: mcp-redis-server
+    app.kubernetes.io/name: mcp-redis
+data:
+  SERVER_NAME: "Redis Server"
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  REDIS_DB: "4"
+  PYTHONPATH: "/app/src"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-redis-server
+  namespace: mcp
+  labels:
+    app: mcp-redis-server
+    app.kubernetes.io/name: mcp-redis
+    app.kubernetes.io/component: server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-redis-server
+  template:
+    metadata:
+      labels:
+        app: mcp-redis-server
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: ubuntu
+      imagePullSecrets:
+        - name: dockerhub-pull-secret
+      containers:
+        - name: redis
+          image: docker.io/docker4zerocool/mcp-servers-redis:latest
+          imagePullPolicy: Always
+          command:
+            - python
+            - src/mcp_servers/redis/server.py
+          ports:
+            - containerPort: 8010
+              name: http
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: mcp-redis-config
+          volumeMounts:
+            - name: tenant-config
+              mountPath: /etc/mcp
+              readOnly: true
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "200m"
+            limits:
+              memory: "512Mi"
+              cpu: "1000m"
+          livenessProbe:
+            tcpSocket:
+              port: 8010
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: 8010
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+      volumes:
+        - name: tenant-config
+          secret:
+            secretName: mcp-redis-tenants
+            items:
+              - key: tenants.json
+                path: tenants.json
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-redis-server
+  namespace: mcp
+  labels:
+    app: mcp-redis-server
+    app.kubernetes.io/name: mcp-redis
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8010
+      targetPort: 8010
+      protocol: TCP
+      name: http
+  selector:
+    app: mcp-redis-server

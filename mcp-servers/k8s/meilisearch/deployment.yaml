@@ -12,8 +12,6 @@ data:
   REDIS_PORT: "6379"
   REDIS_DB: "5"
   PYTHONPATH: "/app/src"
-  # Default MeiliSearch URL using internal Kubernetes DNS
-  MEILISEARCH_TENANT_1_URL: "http://meilisearch.meilisearch:7700"
 
 ---
 apiVersion: apps/v1
@@ -60,21 +58,10 @@ spec:
           envFrom:
             - configMapRef:
                 name: mcp-meilisearch-config
-          env:
-            # Tenant configuration - these should be set via Secrets in production
-            - name: MEILISEARCH_TENANT_1_URL
-              valueFrom:
-                configMapKeyRef:
-                  name: mcp-meilisearch-config
-                  key: MEILISEARCH_TENANT_1_URL
-            - name: MEILISEARCH_TENANT_1_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: mcp-meilisearch-secrets
-                  key: tenant-1-api-key
-                  optional: true
-            - name: MEILISEARCH_TENANT_1_TIMEOUT
-              value: "5"
+          volumeMounts:
+            - name: tenant-config
+              mountPath: /etc/mcp
+              readOnly: true
           resources:
             requests:
               memory: "256Mi"
@@ -98,6 +85,13 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
+      volumes:
+        - name: tenant-config
+          secret:
+            secretName: mcp-meilisearch-tenants
+            items:
+              - key: tenants.json
+                path: tenants.json
 
 ---
 apiVersion: v1
@@ -117,18 +111,3 @@ spec:
       name: http
   selector:
     app: mcp-meilisearch-server
-
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: mcp-meilisearch-secrets
-  namespace: mcp
-  labels:
-    app: mcp-meilisearch-server
-type: Opaque
-stringData:
-  tenant-1-api-key: ""  # Optional - leave empty if no API key required
-
-
-

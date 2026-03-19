@@ -13,6 +13,8 @@ from typing import Optional, Dict, Any
 import redis.asyncio as redis
 from pydantic import BaseModel, Field
 
+from mcp_servers.common.config_loader import load_tenant_configs_from_file
+
 
 class RedisTenantConfig(BaseModel):
     """Configuration for a single Redis tenant."""
@@ -23,9 +25,14 @@ class RedisTenantConfig(BaseModel):
     password: Optional[str] = Field(default=None, description="Redis password")
     db: int = Field(default=0, description="Redis database number (0-15)")
     ssl: bool = Field(default=False, description="Use SSL/TLS")
+    cluster_mode: bool = Field(default=False, description="Connect as Redis Cluster client (handles MOVED redirections)")
     decode_responses: bool = Field(default=True, description="Decode responses as strings")
     max_concurrent_requests: int = Field(
         default=100, description="Maximum concurrent requests per tenant"
+    )
+    key_prefix: str = Field(
+        default="",
+        description="Key namespace prefix for tenant isolation. Empty string defaults to '{tenant_id}:'. Set to '__none__' to disable prefixing.",
     )
 
 
@@ -116,6 +123,18 @@ class RedisTenantManager:
             print(f"Warning: Failed to load all tenant configs from Redis: {e}")
         return configs
 
+    def _load_tenants_from_config_file(self) -> Dict[str, RedisTenantConfig]:
+        """Load tenant configurations from the mounted JSON config file."""
+        raw_configs = load_tenant_configs_from_file()
+        configs = {}
+        for tenant_id, raw in raw_configs.items():
+            try:
+                raw["tenant_id"] = tenant_id
+                configs[tenant_id] = RedisTenantConfig(**raw)
+            except Exception as e:
+                print(f"Warning: Invalid config for tenant '{tenant_id}' in config file: {e}")
+        return configs
+
     def load_tenant_from_env(self, tenant_id: str) -> Optional[RedisTenantConfig]:
         """Load tenant configuration from environment variables."""
         prefix = f"REDIS_TENANT_{tenant_id.upper()}"
@@ -131,20 +150,31 @@ class RedisTenantManager:
             password=password if password else None,
             db=int(os.getenv(f"{prefix}_DB", "0")),
             ssl=os.getenv(f"{prefix}_SSL", "false").lower() == "true",
+            cluster_mode=os.getenv(f"{prefix}_CLUSTER_MODE", "false").lower() == "true",
             decode_responses=os.getenv(f"{prefix}_DECODE_RESPONSES", "true").lower() == "true",
             max_concurrent_requests=int(os.getenv(f"{prefix}_MAX_CONCURRENT", "100")),
         )
 
     async def register_tenant(self, config: RedisTenantConfig) -> None:
         """Register a tenant and create a Redis client with concurrency control."""
-        client = redis.Redis(
-            host=config.host,
-            port=config.port,
-            password=config.password,
-            db=config.db,
-            ssl=config.ssl,
-            decode_responses=config.decode_responses,
-        )
+        if config.cluster_mode:
+            from redis.asyncio.cluster import RedisCluster
+            client = RedisCluster(
+                host=config.host,
+                port=config.port,
+                password=config.password,
+                ssl=config.ssl,
+                decode_responses=config.decode_responses,
+            )
+        else:
+            client = redis.Redis(
+                host=config.host,
+                port=config.port,
+                password=config.password,
+                db=config.db,
+                ssl=config.ssl,
+                decode_responses=config.decode_responses,
+            )
         # Test connection
         await client.ping()
         
@@ -172,21 +202,48 @@ class RedisTenantManager:
                     f"Tenant '{tenant_id}' not found. Configure it via environment variables or register it programmatically."
                 )
 
+        config = self.configs[tenant_id]
+        # Resolve key prefix: empty → "{tenant_id}:", "__none__" → no prefix, else use as-is
+        if not config.key_prefix:
+            prefix = f"{config.tenant_id}:"
+        elif config.key_prefix == "__none__":
+            prefix = ""
+        else:
+            prefix = config.key_prefix
+
         return {
             "client": self.clients[tenant_id],
             "semaphore": self.semaphores[tenant_id],
-            "config": self.configs[tenant_id],
+            "config": config,
+            "key_prefix": prefix,
         }
 
     async def initialize(self) -> None:
-        """Initialize tenant manager - load all tenants from Redis and environment."""
-        # Load all from Redis
+        """Initialize tenant manager - load all tenants from Redis, config file, and environment.
+
+        Loading priority (later sources fill gaps, not overwrite):
+        1. Redis persistence (restored from previous runs)
+        2. Config file (/etc/mcp/tenants.json from K8s Secret volume)
+        3. Environment variables (legacy fallback for local dev / docker-compose)
+        """
+        # 1. Load all from Redis
         redis_configs = await self._load_all_from_redis()
         for config in redis_configs.values():
-            await self.register_tenant(config)
+            try:
+                await self.register_tenant(config)
+            except Exception as e:
+                print(f"Warning: Skipping Redis tenant '{config.tenant_id}': {e}")
 
-        # Also load from environment variables (they take precedence)
-        # Check for common tenant IDs
+        # 2. Load from config file (fills gaps not covered by Redis)
+        file_configs = self._load_tenants_from_config_file()
+        for tenant_id, config in file_configs.items():
+            if tenant_id not in self.configs:
+                try:
+                    await self.register_tenant(config)
+                except Exception as e:
+                    print(f"Warning: Config-file tenant '{tenant_id}' failed: {e}")
+
+        # 3. Load from environment variables (legacy fallback)
         tenant_ids = set()
         for key in os.environ:
             if key.startswith("REDIS_TENANT_") and key.endswith("_HOST"):
@@ -197,7 +254,10 @@ class RedisTenantManager:
             if tenant_id not in self.configs:
                 config = self.load_tenant_from_env(tenant_id)
                 if config:
-                    await self.register_tenant(config)
+                    try:
+                        await self.register_tenant(config)
+                    except Exception as e:
+                        print(f"Warning: Env tenant '{tenant_id}' failed: {e}")
 
     async def close_all(self) -> None:
         """Close all Redis connections."""

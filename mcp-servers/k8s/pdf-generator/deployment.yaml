@@ -56,6 +56,9 @@ spec:
           volumeMounts:
             - name: pdf-reports
               mountPath: /tmp/pdf-reports
+            - name: tenant-config
+              mountPath: /etc/mcp
+              readOnly: true
           resources:
             requests:
               memory: "512Mi"
@@ -82,6 +85,12 @@ spec:
       volumes:
         - name: pdf-reports
           emptyDir: {}
+        - name: tenant-config
+          secret:
+            secretName: mcp-pdf-generator-tenants
+            items:
+              - key: tenants.json
+                path: tenants.json
 
 ---
 apiVersion: v1
@@ -101,4 +110,3 @@ spec:
       name: http
   selector:
     app: mcp-pdf-generator-server
-

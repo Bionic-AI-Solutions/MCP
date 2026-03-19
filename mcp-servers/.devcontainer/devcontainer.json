@@ -1,12 +1,17 @@
 {
   "name": "MCP Servers Development",
-  "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bullseye",
-  
+"build": {
+    "dockerfile": "Dockerfile",
+    "context": "."
+  },
+
   "features": {
     "ghcr.io/devcontainers/features/kubectl-helm-minikube:1": {
-      "version": "latest"
+      "version": "latest",
+      "helm": "none",
+      "minikube": "none"
     },
-    "ghcr.io/devcontainers/features/docker-cli:1": {
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
       "version": "latest"
     }
   },
@@ -15,9 +20,11 @@
     "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind",
     "source=${localEnv:HOME}/.kube,target=/home/vscode/.kube,type=bind,consistency=cached",
     "source=${localEnv:HOME}/.cursor/mcp.json,target=/home/vscode/.cursor/mcp.json,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.cursor/rules,target=/home/vscode/.cursor/rules,type=bind,consistency=cached",
     "source=${localEnv:HOME}/.docker,target=/home/vscode/.docker,type=bind,consistency=cached"
   ],
 
+  "initializeCommand": "mkdir -p ${localEnv:HOME}/.cursor/rules ${localEnv:HOME}/.docker ${localEnv:HOME}/.kube",
   "postCreateCommand": "bash .devcontainer/post-create.sh",
 
   "customizations": {

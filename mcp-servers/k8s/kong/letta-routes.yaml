@@ -1,0 +1,127 @@
+# Kong IngressRoute for Letta MCP Server
+# Supports both HTTP (/mcp) and SSE (/sse) protocols
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mcp-letta-ingress
+  namespace: mcp
+  annotations:
+    konghq.com/strip-path: "false"
+    konghq.com/preserve-host: "true"
+    konghq.com/protocols: "https"
+    konghq.com/plugins: "mcp-letta-cors,mcp-letta-rate-limit,mcp-letta-path-rewrite"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: kong
+  tls:
+    - hosts:
+        - mcp.baisoln.com
+      secretName: mcp-baisoln-com-tls
+  rules:
+    - host: mcp.baisoln.com
+      http:
+        paths:
+          # Main MCP endpoint - HTTP protocol
+          - path: /letta/mcp
+            pathType: Exact
+            backend:
+              service:
+                name: mcp-letta-server
+                port:
+                  number: 8012
+          # SSE endpoint - Server-Sent Events protocol
+          - path: /letta/sse
+            pathType: Exact
+            backend:
+              service:
+                name: mcp-letta-server
+                port:
+                  number: 8012
+          # Discovery endpoint - handles POST to /letta/ (for Cursor discovery)
+          - path: /letta/
+            pathType: Exact
+            backend:
+              service:
+                name: mcp-letta-server
+                port:
+                  number: 8012
+          # Messages endpoint - handles /letta/messages requests
+          - path: /letta/messages
+            pathType: Prefix
+            backend:
+              service:
+                name: mcp-letta-server
+                port:
+                  number: 8012
+          # Health check endpoint (no auth required)
+          - path: /letta/health
+            pathType: Exact
+            backend:
+              service:
+                name: mcp-letta-server
+                port:
+                  number: 8012
+
+---
+# CORS Plugin for Letta
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: mcp-letta-cors
+  namespace: mcp
+  labels:
+    app: mcp-letta-server
+config:
+  origins:
+    - "*"
+  methods:
+    - GET
+    - POST
+    - OPTIONS
+  headers:
+    - Accept
+    - Content-Type
+    - Authorization
+    - X-API-Key
+    - Mcp-Session-Id
+  exposed_headers:
+    - Content-Type
+    - Content-Length
+  credentials: true
+  max_age: 3600
+plugin: cors
+
+---
+# Rate Limiting Plugin for Letta
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: mcp-letta-rate-limit
+  namespace: mcp
+  labels:
+    app: mcp-letta-server
+config:
+  minute: 1000
+  hour: 10000
+  day: 100000
+  limit_by: ip
+  policy: local
+plugin: rate-limiting
+
+---
+# Path Rewrite Plugin for Letta - Rewrites /letta/mcp to /mcp
+apiVersion: configuration.konghq.com/v1
+kind: KongPlugin
+metadata:
+  name: mcp-letta-path-rewrite
+  namespace: mcp
+  labels:
+    app: mcp-letta-server
+config:
+  replace:
+    uri: "/mcp"
+  add:
+    headers:
+      - "Accept:application/json, text/event-stream"
+plugin: request-transformer

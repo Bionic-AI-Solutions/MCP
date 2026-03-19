@@ -23,7 +23,9 @@ resources:
   - genImage/deployment.yaml
   - ai-mcp-server/deployment.yaml
   - langfuse/deployment.yaml
-  
+  - letta/deployment.yaml
+  - redis/deployment.yaml
+
   # Kong Ingress Routes
   - kong/calculator-routes.yaml
   - kong/postgres-routes.yaml
@@ -36,6 +38,8 @@ resources:
   - kong/genimage-routes.yaml
   - kong/ai-mcp-server-routes.yaml
   - kong/langfuse-routes.yaml
+  - kong/letta-routes.yaml
+  - kong/redis-routes.yaml
 
 # Image transformers - using Docker Hub images
 images:
@@ -71,6 +75,12 @@ images:
     newTag: latest
   - name: mcp-servers-langfuse
     newName: docker.io/docker4zerocool/mcp-servers-langfuse
+    newTag: latest
+  - name: mcp-servers-letta
+    newName: docker.io/docker4zerocool/mcp-servers-letta
+    newTag: latest
+  - name: mcp-servers-redis
+    newName: docker.io/docker4zerocool/mcp-servers-redis
     newTag: latest
 
 commonLabels:

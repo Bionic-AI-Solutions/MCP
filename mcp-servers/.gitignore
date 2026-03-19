@@ -43,6 +43,11 @@ htmlcov/
 .env
 .env.local
 
+# Tenant secret files - NEVER commit these (contain credentials)
+k8s/*/tenants-secret.yaml
+k8s/*/tenants-secret.yml
+dev-tenants/
+
 # OS
 .DS_Store
 Thumbs.db

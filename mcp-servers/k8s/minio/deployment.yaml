@@ -51,30 +51,10 @@ spec:
           envFrom:
             - configMapRef:
                 name: mcp-minio-config
-          env:
-            # Tenant configuration - these should be set via Secrets in production
-            - name: MINIO_TENANT_1_ENDPOINT
-              valueFrom:
-                secretKeyRef:
-                  name: mcp-minio-secrets
-                  key: tenant-1-endpoint
-                  optional: true
-            - name: MINIO_TENANT_1_ACCESS_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: mcp-minio-secrets
-                  key: tenant-1-access-key
-                  optional: true
-            - name: MINIO_TENANT_1_SECRET_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: mcp-minio-secrets
-                  key: tenant-1-secret-key
-                  optional: true
-            - name: MINIO_TENANT_1_SECURE
-              value: "false"
-            - name: MINIO_TENANT_1_REGION
-              value: "us-east-1"
+          volumeMounts:
+            - name: tenant-config
+              mountPath: /etc/mcp
+              readOnly: true
           resources:
             requests:
               memory: "256Mi"
@@ -96,6 +76,13 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
+      volumes:
+        - name: tenant-config
+          secret:
+            secretName: mcp-minio-tenants
+            items:
+              - key: tenants.json
+                path: tenants.json
 
 ---
 apiVersion: v1
@@ -115,18 +102,3 @@ spec:
       name: http
   selector:
     app: mcp-minio-server
-
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: mcp-minio-secrets
-  namespace: mcp
-  labels:
-    app: mcp-minio-server
-type: Opaque
-stringData:
-  tenant-1-endpoint: "localhost:9000"
-  tenant-1-access-key: "minioadmin"
-  tenant-1-secret-key: "minioadmin123"
-

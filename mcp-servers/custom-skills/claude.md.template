@@ -1,0 +1,62 @@
+# MCP Skills Package
+
+You have access to 13 MCP servers (217 tools) via on-demand skills. Skills load only when invoked — no context cost until needed.
+
+## Quick Reference
+
+| Skill | Server | What It Does |
+|-------|--------|-------------|
+| `/calc` | Calculator | Math: add, subtract, multiply, divide, power, sqrt, modulo |
+| `/db` | PostgreSQL | SQL queries, transactions, schema inspection (multi-tenant) |
+| `/cache` | Redis | Key-value, hashes, lists, sets, sorted sets, pub/sub (multi-tenant) |
+| `/search` | MeiliSearch | Full-text search indexes and documents (multi-tenant) |
+| `/storage` | MinIO | S3-compatible object storage: buckets, upload, download (multi-tenant) |
+| `/email` | Mail | Send emails: plain, HTML, attachments, bulk (multi-tenant) |
+| `/pdf` | PDF Generator | HTML to PDF conversion (multi-tenant) |
+| `/media` | FFmpeg | Video/audio: convert, trim, merge, extract, resize (multi-tenant) |
+| `/images` | GenImage | AI image generation, upscale, background removal (multi-tenant) |
+| `/ai` | AI Server | LLM chat, embeddings, TTS, image gen, video gen (multi-tenant) |
+| `/observe` | Langfuse | LLM observability: traces, spans, generations, scores (multi-tenant) |
+| `/agents` | Letta | AI agent platform: agents, memory, conversations, tools (multi-tenant) |
+| `/projects` | OpenProject | Project mgmt: work packages, projects, users, time tracking |
+
+## Domain Groups (convenience routing)
+
+| Skill | Routes To | Use When |
+|-------|-----------|----------|
+| `/data` | `/db`, `/cache`, `/search` | Data storage, querying, or search |
+| `/creative` | `/images`, `/media`, `/ai` | Image/video/audio generation or AI inference |
+| `/comms` | `/email`, `/pdf` | Sending notifications or generating documents |
+| `/devops` | `/observe`, `/projects`, `/storage` | Observability, project tracking, file storage |
+
+## Meta & Operations
+
+| Skill | Purpose |
+|-------|---------|
+| `/mcp` | Universal gateway: list servers, discover tools, call any tool |
+| `/validate-mcp` | Health-check MCP servers and tenant connectivity |
+| `/manage-tenants` | Create/list/update/delete tenants across MCP servers |
+
+## How It Works
+
+- **Invoke a skill** by typing `/skillname` (e.g., `/db SELECT * FROM users`)
+- **Multi-tenant**: Most tools accept a `tenant_id` parameter (default: `base`)
+- **Protocol**: Skills use `~/.claude/bin/mcp-rpc` to make JSON-RPC calls over HTTPS
+- **Gateway**: {{GATEWAY_URL}}
+
+## Routing Hints
+
+When the user mentions these topics, suggest the relevant skill:
+- SQL, database, query, table, schema → `/db`
+- Cache, Redis, key-value, pub/sub → `/cache`
+- Search, index, full-text → `/search`
+- Upload, download, bucket, S3, file storage → `/storage`
+- Email, send mail, notification → `/email`
+- PDF, report, document generation → `/pdf`
+- Video, audio, convert, transcode, ffmpeg → `/media`
+- Image generation, upscale, background removal → `/images`
+- LLM, chat completion, embeddings, TTS, AI inference → `/ai`
+- Traces, observability, logging, Langfuse → `/observe`
+- Agent, memory, conversation, Letta → `/agents`
+- Work package, project, task, time tracking → `/projects`
+- MCP, tool discovery, health check → `/mcp`

@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(kubectl rollout:*)",
+      "Bash(kubectl rollout status:*)",
+      "Bash(kubectl apply -f /workspace/mcp-servers/k8s/letta/deployment.yaml)"
+    ]
+  }
+}

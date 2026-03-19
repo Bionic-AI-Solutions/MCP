@@ -287,6 +287,37 @@ services:
       retries: 3
       start_period: 10s
 
+  # Letta MCP Server
+  mcp-letta-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: letta
+    container_name: mcp-letta-server
+    ports:
+      - "8012:8012"
+    environment:
+      - SERVER_NAME=Letta Server
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_DB=10
+      - LETTA_TENANT_1_BASE_URL=${LETTA_TENANT_1_BASE_URL:-http://letta:8283}
+      - LETTA_TENANT_1_PASSWORD=${LETTA_TENANT_1_PASSWORD:-}
+      - LETTA_TENANT_1_TIMEOUT=${LETTA_TENANT_1_TIMEOUT:-30}
+      - LETTA_TENANT_1_MAX_CONCURRENCY=${LETTA_TENANT_1_MAX_CONCURRENCY:-5}
+    restart: unless-stopped
+    networks:
+      - mcp-network
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8012/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
 networks:
   mcp-network:
     driver: bridge

@@ -14,6 +14,8 @@ from minio import Minio
 from pydantic import BaseModel, Field
 import redis.asyncio as redis
 
+from mcp_servers.common.config_loader import load_tenant_configs_from_file
+
 
 class MinioTenantConfig(BaseModel):
     """Configuration for a single MinIO tenant."""
@@ -116,6 +118,18 @@ class MinioTenantManager:
             print(f"Warning: Failed to load all tenant configs from Redis: {e}")
         return configs
 
+    def _load_tenants_from_config_file(self) -> Dict[str, MinioTenantConfig]:
+        """Load tenant configurations from the mounted JSON config file."""
+        raw_configs = load_tenant_configs_from_file()
+        configs = {}
+        for tenant_id, raw in raw_configs.items():
+            try:
+                raw["tenant_id"] = tenant_id
+                configs[tenant_id] = MinioTenantConfig(**raw)
+            except Exception as e:
+                print(f"Warning: Invalid config for tenant '{tenant_id}' in config file: {e}")
+        return configs
+
     def load_tenant_from_env(self, tenant_id: str) -> Optional[MinioTenantConfig]:
         """Load tenant configuration from environment variables."""
         prefix = f"MINIO_TENANT_{tenant_id.upper()}"
@@ -173,14 +187,31 @@ class MinioTenantManager:
         }
 
     async def initialize(self) -> None:
-        """Initialize tenant manager - load all tenants from Redis and environment."""
-        # Load all from Redis
+        """Initialize tenant manager - load all tenants from Redis, config file, and environment.
+
+        Loading priority (later sources fill gaps, not overwrite):
+        1. Redis persistence (restored from previous runs)
+        2. Config file (/etc/mcp/tenants.json from K8s Secret volume)
+        3. Environment variables (legacy fallback for local dev / docker-compose)
+        """
+        # 1. Load all from Redis
         redis_configs = await self._load_all_from_redis()
         for config in redis_configs.values():
-            await self.register_tenant(config)
+            try:
+                await self.register_tenant(config)
+            except Exception as e:
+                print(f"Warning: Skipping Redis tenant '{config.tenant_id}': {e}")
 
-        # Also load from environment variables (they take precedence)
-        # Check for common tenant IDs
+        # 2. Load from config file (fills gaps not covered by Redis)
+        file_configs = self._load_tenants_from_config_file()
+        for tenant_id, config in file_configs.items():
+            if tenant_id not in self.configs:
+                try:
+                    await self.register_tenant(config)
+                except Exception as e:
+                    print(f"Warning: Config-file tenant '{tenant_id}' failed: {e}")
+
+        # 3. Load from environment variables (legacy fallback)
         tenant_ids = set()
         for key in os.environ:
             if key.startswith("MINIO_TENANT_") and key.endswith("_ENDPOINT"):
@@ -191,7 +222,10 @@ class MinioTenantManager:
             if tenant_id not in self.configs:
                 config = self.load_tenant_from_env(tenant_id)
                 if config:
-                    await self.register_tenant(config)
+                    try:
+                        await self.register_tenant(config)
+                    except Exception as e:
+                        print(f"Warning: Env tenant '{tenant_id}' failed: {e}")
 
     async def close_all(self) -> None:
         """Close Redis connection."""

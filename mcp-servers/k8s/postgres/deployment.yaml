@@ -51,44 +51,10 @@ spec:
           envFrom:
             - configMapRef:
                 name: mcp-postgres-config
-          env:
-            # Tenant configuration - these should be set via Secrets in production
-            - name: POSTGRES_TENANT_1_HOST
-              valueFrom:
-                secretKeyRef:
-                  name: mcp-postgres-secrets
-                  key: tenant-1-host
-                  optional: true
-            - name: POSTGRES_TENANT_1_PORT
-              valueFrom:
-                secretKeyRef:
-                  name: mcp-postgres-secrets
-                  key: tenant-1-port
-                  optional: true
-            - name: POSTGRES_TENANT_1_DB
-              valueFrom:
-                secretKeyRef:
-                  name: mcp-postgres-secrets
-                  key: tenant-1-db
-                  optional: true
-            - name: POSTGRES_TENANT_1_USER
-              valueFrom:
-                secretKeyRef:
-                  name: mcp-postgres-secrets
-                  key: tenant-1-user
-                  optional: true
-            - name: POSTGRES_TENANT_1_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: mcp-postgres-secrets
-                  key: tenant-1-password
-                  optional: true
-            - name: POSTGRES_TENANT_1_MIN_POOL_SIZE
-              value: "2"
-            - name: POSTGRES_TENANT_1_MAX_POOL_SIZE
-              value: "10"
-            - name: POSTGRES_TENANT_1_SSL
-              value: "false"
+          volumeMounts:
+            - name: tenant-config
+              mountPath: /etc/mcp
+              readOnly: true
           resources:
             requests:
               memory: "256Mi"
@@ -110,6 +76,13 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
+      volumes:
+        - name: tenant-config
+          secret:
+            secretName: mcp-postgres-tenants
+            items:
+              - key: tenants.json
+                path: tenants.json
 
 ---
 apiVersion: v1
@@ -129,20 +102,3 @@ spec:
       name: http
   selector:
     app: mcp-postgres-server
-
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: mcp-postgres-secrets
-  namespace: mcp
-  labels:
-    app: mcp-postgres-server
-type: Opaque
-stringData:
-  tenant-1-host: "localhost"
-  tenant-1-port: "5432"
-  tenant-1-db: "mydb"
-  tenant-1-user: "postgres"
-  tenant-1-password: "password"
-

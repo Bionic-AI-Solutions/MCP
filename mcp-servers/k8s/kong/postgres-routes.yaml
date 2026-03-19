@@ -102,9 +102,9 @@ metadata:
   labels:
     app: mcp-postgres-server
 config:
-  minute: 1000
-  hour: 10000
-  day: 100000
+  minute: 50000
+  hour: 500000
+  day: 5000000
   limit_by: ip
   policy: local
 plugin: rate-limiting

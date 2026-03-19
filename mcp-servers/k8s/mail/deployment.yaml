@@ -10,10 +10,8 @@ data:
   SERVER_NAME: "Mail Server"
   REDIS_HOST: "redis"
   REDIS_PORT: "6379"
-  REDIS_DB: "4"
+  REDIS_DB: "6"
   PYTHONPATH: "/app/src"
-  # Default mail API URL using internal Kubernetes DNS
-  DEFAULT_MAIL_API_URL: "http://mail-service.mail"
 
 ---
 apiVersion: apps/v1
@@ -53,16 +51,10 @@ spec:
           envFrom:
             - configMapRef:
                 name: mcp-mail-config
-          env:
-            # Tenant configuration - these should be set via Secrets in production
-            - name: MAIL_TENANT_1_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: mcp-mail-secrets
-                  key: tenant-1-api-key
-                  optional: true
-            - name: MAIL_TENANT_1_MAIL_API_URL
-              value: "http://mail-service.mail"
+          volumeMounts:
+            - name: tenant-config
+              mountPath: /etc/mcp
+              readOnly: true
           resources:
             requests:
               memory: "256Mi"
@@ -86,6 +78,13 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 3
+      volumes:
+        - name: tenant-config
+          secret:
+            secretName: mcp-mail-tenants
+            items:
+              - key: tenants.json
+                path: tenants.json
 
 ---
 apiVersion: v1
@@ -105,16 +104,3 @@ spec:
       name: http
   selector:
     app: mcp-mail-server
-
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: mcp-mail-secrets
-  namespace: mcp
-  labels:
-    app: mcp-mail-server
-type: Opaque
-stringData:
-  tenant-1-api-key: "your-jwt-token-here"
-

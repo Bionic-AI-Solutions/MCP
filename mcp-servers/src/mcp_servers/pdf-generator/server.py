@@ -130,17 +130,60 @@ async def pdf_generate_pdf(
     return_format: str = "base64",
     ctx: Optional[Context] = None,
 ) -> Dict[str, Any]:
-    """Generate a PDF report from a template and content.
-    
+    """Generate a PDF report from an HTML template and content data.
+
+    Renders the provided HTML template by substituting placeholder variables with
+    the supplied content values, then converts the resulting HTML into a PDF
+    document. Use this tool whenever you need to produce a downloadable or
+    transmittable PDF report for a tenant.
+
+    Template syntax uses double-curly-brace placeholders: ``{{variable_name}}``.
+    Each key in the ``content`` dictionary is matched against these placeholders
+    and replaced with its string representation. HTML/CSS in the template is
+    fully supported when WeasyPrint is available; otherwise a plain-text
+    fallback using ReportLab is used.
+
     Args:
-        tenant_id: Tenant identifier
-        template: HTML template string with {{variable}} placeholders or template name
-        content: Dictionary of data to fill into the template
-        filename: Optional filename for the PDF (default: auto-generated)
-        return_format: 'base64' to return PDF as base64 data stream, 'url' for temporary file URL
-        
+        tenant_id (str): Tenant identifier whose configuration context is used
+            for PDF generation.
+        template (str): An HTML template string containing ``{{variable}}``
+            placeholders that will be replaced with values from ``content``.
+        content (Dict[str, Any]): A dictionary of key-value pairs used to
+            populate the template placeholders. Keys must match the placeholder
+            names in the template (without the surrounding braces).
+        filename (str | None): Optional filename for the generated PDF. Defaults
+            to an auto-generated name in the format
+            ``report_<tenant_id>_<hash>_<timestamp>.pdf``. A ``.pdf`` extension
+            is appended automatically if not already present.
+        return_format (str): Controls how the PDF is returned. Defaults to
+            ``"base64"``.
+            - ``"base64"``: Returns the PDF content as a base64-encoded string
+              (the temporary file is deleted immediately after encoding).
+            - ``"url"``: Returns a temporary download URL. The file is retained
+              on the server for the configured retention period (default 24 h).
+
     Returns:
-        Dictionary with PDF data or URL
+        Dict with:
+        - success (bool): Whether PDF generation succeeded.
+        - filename (str): The filename of the generated PDF.
+        - data (str): Base64-encoded PDF content (only when return_format is
+          ``"base64"``).
+        - format (str): ``"base64"`` (only when return_format is ``"base64"``).
+        - size_bytes (int): Size of the base64 payload in bytes (only when
+          return_format is ``"base64"``).
+        - file_id (str): Unique file identifier for retrieval (only when
+          return_format is ``"url"``).
+        - url (str): Temporary download URL (only when return_format is
+          ``"url"``).
+        - expires_at (str): ISO-8601 timestamp when the file will be deleted
+          (only when return_format is ``"url"``).
+        - message (str): Human-readable status message.
+        - error (str): Error description if the operation failed.
+
+    Note:
+        Generated files returned via ``"url"`` are stored in a temporary
+        directory and automatically expire after the retention period configured
+        by the ``PDF_RETENTION_HOURS`` environment variable (default 24 hours).
     """
     if ctx:
         await ctx.info(f"Generating PDF for tenant: {tenant_id}")
@@ -214,13 +257,27 @@ async def pdf_get_pdf_file(
     file_id: str,
     ctx: Optional[Context] = None,
 ) -> Dict[str, Any]:
-    """Retrieve a previously generated PDF file by ID.
-    
+    """Retrieve a previously generated PDF file by its unique file identifier.
+
+    Looks up and returns a PDF that was created by ``pdf_generate_pdf`` with
+    ``return_format="url"``. Use this tool when you have a ``file_id`` from a
+    prior generation call and need to fetch the actual PDF content.
+
     Args:
-        file_id: File ID returned from generate_pdf when using 'url' format
-        
+        file_id (str): The unique file identifier returned in the ``file_id``
+            field of a ``pdf_generate_pdf`` response when ``return_format`` was
+            set to ``"url"``.
+
     Returns:
-        Dictionary with PDF data or error
+        Dict with:
+        - success (bool): Whether the retrieval succeeded.
+        - error (str): Error description if the operation failed (e.g., file
+          not found or expired).
+
+    Note:
+        This endpoint is currently a placeholder. File retrieval by ID is not
+        yet implemented. To obtain PDF content directly, call
+        ``pdf_generate_pdf`` with ``return_format="base64"`` instead.
     """
     if ctx:
         await ctx.info(f"Retrieving PDF file: {file_id}")
@@ -239,11 +296,26 @@ async def pdf_register_tenant(
     storage_path: Optional[str] = None,
     ctx: Optional[Context] = None,
 ) -> Dict[str, Any]:
-    """Register a new tenant configuration.
-    
+    """Register a new tenant for PDF generation.
+
+    Creates and persists a tenant configuration so that subsequent calls to
+    ``pdf_generate_pdf`` can operate under that tenant's context. Use this tool
+    before generating PDFs for a tenant that has not yet been registered.
+
+    If the tenant already exists, calling this tool will overwrite the existing
+    configuration with the new values.
+
     Args:
-        tenant_id: Unique tenant identifier
-        storage_path: Optional custom storage path for this tenant's PDFs
+        tenant_id (str): A unique identifier for the tenant. This value is used
+            in all subsequent tool calls to scope operations to this tenant.
+        storage_path (str | None): Optional filesystem path where this tenant's
+            generated PDFs should be stored. Defaults to None, which causes the
+            server-wide temporary directory (``PDF_TEMP_DIR``) to be used.
+
+    Returns:
+        Dict with:
+        - success (bool): Whether the registration succeeded.
+        - message (str): Human-readable confirmation message.
     """
     if ctx:
         await ctx.info(f"Registering tenant: {tenant_id}")

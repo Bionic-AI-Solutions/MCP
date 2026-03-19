@@ -1,0 +1,4 @@
+# MCP Gateway Configuration
+# Used by mcp-rpc helper and Claude Code skills
+# Override with MCP_GATEWAY_URL environment variable
+GATEWAY_URL="https://mcp.baisoln.com"

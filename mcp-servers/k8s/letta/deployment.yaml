@@ -1,0 +1,117 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mcp-letta-config
+  namespace: mcp
+  labels:
+    app: mcp-letta-server
+    app.kubernetes.io/name: mcp-letta
+data:
+  SERVER_NAME: "Letta Server"
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  REDIS_DB: "10"
+  PYTHONPATH: "/app/src"
+  PYTHONDONTWRITEBYTECODE: "1"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-letta-server
+  namespace: mcp
+  labels:
+    app: mcp-letta-server
+    app.kubernetes.io/name: mcp-letta
+    app.kubernetes.io/component: server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-letta-server
+  template:
+    metadata:
+      labels:
+        app: mcp-letta-server
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: ubuntu
+      imagePullSecrets:
+        - name: dockerhub-pull-secret
+      containers:
+        - name: letta
+          image: docker.io/docker4zerocool/mcp-servers-letta:latest
+          imagePullPolicy: Always
+          command:
+            - python
+            - -c
+            - |
+              from mcp_servers.letta.server import mcp
+              import uvicorn
+              uvicorn.run(mcp.http_app(), host="0.0.0.0", port=8012)
+          ports:
+            - containerPort: 8012
+              name: http
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: mcp-letta-config
+          volumeMounts:
+            - name: tenant-config
+              mountPath: /etc/mcp
+              readOnly: true
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "200m"
+            limits:
+              memory: "768Mi"
+              cpu: "1000m"
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8012
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 12
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8012
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8012
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+      volumes:
+        - name: tenant-config
+          secret:
+            secretName: mcp-letta-tenants
+            items:
+              - key: tenants.json
+                path: tenants.json
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-letta-server
+  namespace: mcp
+  labels:
+    app: mcp-letta-server
+    app.kubernetes.io/name: mcp-letta
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8012
+      targetPort: 8012
+      protocol: TCP
+      name: http
+  selector:
+    app: mcp-letta-server
