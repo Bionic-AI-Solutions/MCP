@@ -2,10 +2,10 @@
 Letta MCP Server (Multi-tenant)
 
 A FastMCP server providing full Letta AI agent platform operations with multi-tenant support.
-Exposes 18 consolidated tools covering 202 operations: agents (33), memory (20),
+Exposes 19 consolidated tools covering 207 operations: agents (33), memory (20),
 tools (13), sources (15), jobs (4), files/folders (8), MCP integrations (14),
 temporal memory (5), conversations (6), groups (12), identities (10), runs/steps (17),
-archives (9), models/providers (10), sandboxes (12), and miscellaneous (8).
+archives (9), models/providers (10), sandboxes (12), miscellaneous (8), and user memory (5).
 
 Compatible with Letta v0.16.4+. Graphiti temporal memory requires a Graphiti service.
 """
@@ -153,6 +153,90 @@ async def _auto_attach_org_identity(tenant_id: str, agent_id: str) -> Optional[s
     if not result.get("success"):
         return f"Org identity attach failed: {result.get('error', 'unknown')}"
     return None
+
+
+async def _resolve_user_agent(tenant_id: str, user_id: str) -> Dict[str, Any]:
+    """Resolve user_id → agent_id for a tenant, creating identity + agent on demand.
+
+    Returns {"success": True, "agent_id": "...", "identity_id": "...", "created": bool}
+    or {"success": False, "error": "..."}.
+
+    Caches in Redis (key: mcp:letta:user_agent:{tenant_id}:{user_id}, TTL 1h).
+    """
+    # Check Redis cache
+    cache_key = f"mcp:letta:user_agent:{tenant_id}:{user_id}"
+    if tenant_manager.redis_client:
+        try:
+            cached = await tenant_manager.redis_client.get(cache_key)
+            if cached:
+                return {"success": True, "agent_id": cached, "identity_id": "", "created": False}
+        except Exception:
+            pass
+
+    identifier_key = f"user:{user_id}"
+
+    # Step 1: Get or create user identity
+    result = await _api_call(tenant_id, "POST", "/v1/identities", json_body={
+        "identifier_key": identifier_key,
+        "name": f"User {user_id[:20]}",
+        "identity_type": "user",
+    })
+    if result["success"]:
+        identity_id = result["data"]["id"]
+    elif "409" in str(result.get("error", "")):
+        # Already exists — look it up
+        lookup = await _api_call(tenant_id, "GET", "/v1/identities/",
+                                  params={"identifier_key": identifier_key, "limit": 1})
+        if not lookup["success"] or not lookup["data"]:
+            return {"success": False, "error": f"Identity lookup failed: {lookup.get('error')}"}
+        identity_id = lookup["data"][0]["id"]
+    else:
+        return {"success": False, "error": f"Identity creation failed: {result.get('error')}"}
+
+    # Step 2: Find existing RAG agent for this identity
+    agents_result = await _api_call(tenant_id, "GET",
+                                     f"/v1/identities/{identity_id}/agents",
+                                     params={"limit": 10})
+    if agents_result["success"]:
+        for a in (agents_result["data"] if isinstance(agents_result["data"], list) else []):
+            if (a.get("name") or "").startswith("rag-"):
+                agent_id = a["id"]
+                # Cache in Redis
+                if tenant_manager.redis_client:
+                    try:
+                        await tenant_manager.redis_client.setex(cache_key, 3600, agent_id)
+                    except Exception:
+                        pass
+                return {"success": True, "agent_id": agent_id, "identity_id": identity_id, "created": False}
+
+    # Step 3: Create dedicated RAG agent
+    agent_result = await _api_call(tenant_id, "POST", "/v1/agents", json_body={
+        "name": f"rag-{user_id[:12]}",
+        "description": f"RAG archival agent for user {user_id[:20]}",
+        "model": "openai/gpt-4o-mini",
+        "embedding": "openai/text-embedding-3-small",
+        "include_base_tools": True,
+    })
+    if not agent_result["success"]:
+        return {"success": False, "error": f"Agent creation failed: {agent_result.get('error')}"}
+
+    agent_id = agent_result["data"]["id"]
+
+    # Attach user identity
+    await _api_call(tenant_id, "PATCH",
+                     f"/v1/agents/{agent_id}/identities/attach/{identity_id}")
+
+    # Attach org identity for tenant scoping
+    await _auto_attach_org_identity(tenant_id, agent_id)
+
+    # Cache in Redis
+    if tenant_manager.redis_client:
+        try:
+            await tenant_manager.redis_client.setex(cache_key, 3600, agent_id)
+        except Exception:
+            pass
+
+    return {"success": True, "agent_id": agent_id, "identity_id": identity_id, "created": True}
 
 
 async def _graphiti_call(
@@ -3801,6 +3885,151 @@ async def lt_misc(
 
         else:
             return {"success": False, "error": f"Unknown operation '{operation}'. Valid: list_tags, search_messages, list_messages, batch_messages, search_passages, get_embedding_storage, chat_completion, health"}
+
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+# ============================================================================
+# Tool 19: User Memory (high-level convenience for user-scoped archival/core)
+# ============================================================================
+
+@mcp.tool
+async def lt_user_memory(
+    tenant_id: str,
+    user_id: str,
+    operation: str,
+    content: Optional[str] = None,
+    source: Optional[str] = None,
+    query: Optional[str] = None,
+    key: Optional[str] = None,
+    value: Optional[str] = None,
+    limit: int = 10,
+    ctx: Optional[Context] = None,
+) -> Dict[str, Any]:
+    """High-level user-scoped memory operations — auto-resolves user to a dedicated agent.
+
+    Provides a simple interface for storing and searching memories per user without
+    needing to know Letta agent IDs.  A dedicated RAG agent is created per user
+    on first use, attached to both a user identity and the tenant's org identity.
+
+    Args:
+        tenant_id: Tenant identifier (must be registered via lt_register_tenant).
+        user_id: External user identifier (e.g., Clerk user ID). Used to resolve
+                 or create a dedicated Letta identity + RAG agent for this user.
+        operation: One of:
+            - "store_archival": Store text in archival memory. Requires content.
+                Optional source tag for later deletion (e.g., "user_upload:report.pdf").
+            - "search": Semantic search over archival memory. Requires query.
+                Optional limit (default 10).
+            - "get_core": Get all core memory blocks.
+            - "update_core": Update a core memory block by label. Requires key + value.
+                Creates the block if it doesn't exist.
+            - "delete_by_source": Delete archival passages matching a source tag.
+                Requires source.
+        content: Text to store (store_archival).
+        source: Source tag for grouping passages (store_archival, delete_by_source).
+        query: Search query (search).
+        key: Core memory block label (update_core).
+        value: Core memory block value (update_core).
+        limit: Max search results. Defaults to 10.
+    """
+    try:
+        # Resolve user → agent
+        resolve = await _resolve_user_agent(tenant_id, user_id)
+        if not resolve["success"]:
+            return resolve
+        agent_id = resolve["agent_id"]
+
+        if operation == "store_archival":
+            if not content:
+                return {"success": False, "error": "content required for store_archival"}
+            text = f"[source:{source}] {content}" if source else content
+            result = await _api_call(tenant_id, "POST",
+                                      f"/v1/agents/{agent_id}/archival-memory",
+                                      json_body={"text": text})
+            if not result["success"]:
+                return result
+            data = result["data"]
+            passage_id = data[0]["id"] if isinstance(data, list) and data else None
+            return {"success": True, "passage_id": passage_id,
+                    "agent_id": agent_id, "created_agent": resolve.get("created", False)}
+
+        elif operation == "search":
+            if not query:
+                return {"success": False, "error": "query required for search"}
+            result = await _api_call(tenant_id, "GET",
+                                      f"/v1/agents/{agent_id}/archival-memory",
+                                      params={"query": query, "limit": limit})
+            if not result["success"]:
+                return result
+            passages = result["data"] if isinstance(result["data"], list) else []
+            summary = [{"id": p.get("id"), "text": _truncate(p.get("text"), 300),
+                         "created_at": p.get("created_at")} for p in passages]
+            return {"success": True, "passages": summary, "count": len(summary)}
+
+        elif operation == "get_core":
+            result = await _api_call(tenant_id, "GET",
+                                      f"/v1/agents/{agent_id}/core-memory")
+            if not result["success"]:
+                return result
+            memory = result["data"]
+            blocks = memory.get("blocks", []) if isinstance(memory, dict) else []
+            summary = [{"id": b.get("id"), "label": b.get("label"),
+                         "value": _truncate(b.get("value"), 300)} for b in blocks]
+            return {"success": True, "blocks": summary, "count": len(summary)}
+
+        elif operation == "update_core":
+            if not key or not value:
+                return {"success": False, "error": "key and value required for update_core"}
+            # Find block by label
+            mem_result = await _api_call(tenant_id, "GET",
+                                          f"/v1/agents/{agent_id}/core-memory")
+            if not mem_result["success"]:
+                return mem_result
+            memory = mem_result["data"]
+            blocks = memory.get("blocks", []) if isinstance(memory, dict) else []
+            target = next((b for b in blocks if b.get("label") == key), None)
+
+            if target:
+                result = await _api_call(tenant_id, "PATCH",
+                                          f"/v1/blocks/{target['id']}",
+                                          json_body={"value": value})
+                if not result["success"]:
+                    return result
+                return {"success": True, "block_id": target["id"], "action": "updated"}
+            else:
+                # Create block and attach
+                create_result = await _api_call(tenant_id, "POST", "/v1/blocks",
+                                                 json_body={"label": key, "value": value})
+                if not create_result["success"]:
+                    return create_result
+                block_id = create_result["data"]["id"]
+                await _api_call(tenant_id, "PATCH",
+                                 f"/v1/agents/{agent_id}/core-memory/blocks/attach/{block_id}")
+                return {"success": True, "block_id": block_id, "action": "created"}
+
+        elif operation == "delete_by_source":
+            if not source:
+                return {"success": False, "error": "source required for delete_by_source"}
+            tag = f"[source:{source}]"
+            result = await _api_call(tenant_id, "GET",
+                                      f"/v1/agents/{agent_id}/archival-memory",
+                                      params={"query": tag, "limit": 100})
+            if not result["success"]:
+                return result
+            passages = result["data"] if isinstance(result["data"], list) else []
+            deleted = 0
+            for p in passages:
+                if tag in (p.get("text") or ""):
+                    del_result = await _api_call(tenant_id, "DELETE",
+                                                  f"/v1/passages/{p['id']}")
+                    if del_result.get("success"):
+                        deleted += 1
+            return {"success": True, "deleted": deleted}
+
+        else:
+            return {"success": False, "error": f"Unknown operation '{operation}'. Valid: store_archival, search, get_core, update_core, delete_by_source"}
 
     except Exception as e:
         return {"success": False, "error": str(e)}
